@@ -1,0 +1,11 @@
+# 依赖与构建产物
+node_modules/
+miniprogram_npm/
+
+# 开发者工具本地个人配置
+project.private.config.json
+
+# 系统与日志
+.DS_Store
+Thumbs.db
+*.log

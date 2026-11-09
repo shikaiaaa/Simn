@@ -1,0 +1,42 @@
+{
+  "spec": "SPEC-0000",
+  "requirement": "REQ-0000",
+  "tasks": [
+    {
+      "id": "DEV-0000-01",
+      "role": "dev",
+      "title": "实现 CSV 分页导出",
+      "dependsOn": [],
+      "writeScopes": ["src/export/", "tests/unit/export/"],
+      "acceptance": ["10 万行导出 < 15s", "内存峰值 < 500MB", "空结果返回表头"],
+      "estimate": "1d"
+    },
+    {
+      "id": "DEV-0000-02",
+      "role": "dev",
+      "title": "导出接口限流",
+      "dependsOn": ["DEV-0000-01"],
+      "writeScopes": ["src/api/export.route.ts"],
+      "acceptance": ["单用户 1 分钟内超过 3 次返回 429"],
+      "estimate": "0.5d"
+    },
+    {
+      "id": "QA-0000-01",
+      "role": "qa",
+      "title": "测试用例设计",
+      "dependsOn": [],
+      "writeScopes": ["docs/qa/TC-0000.md"],
+      "acceptance": ["SPEC 每条验收标准均有对应用例"],
+      "estimate": "0.5d"
+    },
+    {
+      "id": "QA-0000-02",
+      "role": "qa",
+      "title": "执行与测试报告",
+      "dependsOn": ["DEV-0000-01", "DEV-0000-02"],
+      "writeScopes": ["tests/e2e/", "docs/qa/REPORT-0000.md"],
+      "acceptance": ["用例执行率 100%", "失败项均有缺陷单", "报告给出明确结论"],
+      "estimate": "1d"
+    }
+  ]
+}
