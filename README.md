@@ -1,16 +1,24 @@
 # Sinn
 
 微信小程序 + **SA → SE → DEV → QA** 四角色流水线的接入版仓库。
-业务代码是开发者工具默认模板（`pages/index`、`pages/logs`、`components/navigation-bar`），
-已被移到 `miniprogram/` 下，流程文档与门禁已就位。
+P1「2D 虚拟试穿」内部 demo 已完整走完一轮四角色流水线
+（REQ-0001 → SPEC-0001 + TASKS-0001 → DEV-0001 → REPORT-0001）。
+技术基线：**skyline 渲染器 + glass-easel + 自定义导航栏**，源码根 `miniprogram/`，文档与测试不进包。
 
-当前状态：
+当前状态（2026-11-11）：
 
 ```
-check-gates.ps1   → 3 个文档, 0 个任务清单, FAIL=0, WARN=0
-check-wxapp.ps1   → appid: wxbbdcd1c49ad1259a
-                    2 个页面, 0 个分包, 主包 14.7KB / 合计 14.7KB, FAIL=0, WARN=0
+check-gates.ps1   → 10 个文档, 1 个任务清单, FAIL=0, WARN=0
+check-wxapp.ps1   → appid: wx735e60c2c07673aa
+                    7 个页面, 0 个分包, 主包 174.6KB / 合计 174.6KB, FAIL=0, WARN=0
+jest              → 32 suites / 419 tests 全绿
+integration-check → 10/10 PASS（mock 全链路）
+e2e（真实云）      → 12 条 L3：4 通过 / 0 失败 / 8 阻塞
 ```
+
+QA 结论为 **「不通过（demo 阶段阻塞）」**：本阶段可执行证据全部通过，剩余缺口是外部条件
+（真实试穿供应商、真机、人工视觉、正式隐私文本等），详见 `docs/qa/REPORT-0001.md`。
+**不得提审、不得发布**——发布、提审、灰度、回滚由人执行并签字，agent 不代签。
 
 ---
 
@@ -19,19 +27,22 @@ check-wxapp.ps1   → appid: wxbbdcd1c49ad1259a
 ```
 Sinn/
 ├─ AGENTS.md              四角色写范围 + 上游门禁 + 小程序专项（agent 自动读取）
-├─ project.config.json    appid 保留你自己的；miniprogramRoot = miniprogram/
+├─ project.config.json    appid / miniprogramRoot / cloudfunctionRoot / libVersion
 ├─ project.private.config.json   开发者工具本地配置（不入库）
 ├─ miniprogram/           唯一进包的目录
 │  ├─ app.js / app.json / app.wxss / sitemap.json
-│  ├─ pages/index、pages/logs
-│  ├─ components/navigation-bar
-│  └─ utils/
+│  ├─ config/env.js       云开发 envId 唯一出处
+│  ├─ pages/              7 页：index consent capture garment generating result profile
+│  ├─ components/         navigation-bar、zoom-view（1x–3x 双指缩放）
+│  ├─ services/           api / consent / precheck / upload / polling / size
+│  └─ utils/              util / zoom-math / image-prep
+├─ cloudfunctions/        云函数（不入包）：sinn-task / sinn-account / sinn-cleanup
 ├─ docs/
-│  ├─ 00-inbox/           原始需求 RQ-0001.md 放这里（无 frontmatter 也行）
-│  ├─ sa/  se/  dev/  qa/ 各角色产物，模板已就位
+│  ├─ 00-inbox/           原始需求 RQ-0001.md
+│  ├─ sa/ se/ dev/ qa/    各角色产物（REQ / SPEC+TASKS / DEV 交接 / TC+E2E-LOG+REPORT）
 │  └─ se/SPEC-MINIAPP-ADDENDUM.md、qa/TEST-STRATEGY.md、qa/RELEASE-CHECKLIST.md
 ├─ playbooks/             lead / sa / se / dev / qa 作业规程
-├─ tests/                 unit/（miniprogram-simulate + jest）、mocks/wx.js
+├─ tests/                 unit/（jest）、e2e/（miniprogram-automator）、mocks/wx.js、fixtures/
 └─ tools/
    ├─ check-gates.ps1     文档门禁 + 任务 DAG
    └─ check-wxapp.ps1     页面注册 / 包体积 / 动态代码 / 隐私登记
@@ -58,7 +69,8 @@ cd C:\Users\admin\WeChatProjects\Sinn
 
 ## 4. 接入四角色流程：新开一个会话
 
-本会话（成绩工具演示）不能复用：成员名永久、任务板有 10 条旧任务、共享 cwd 无隔离。
+四角色流水线按会话独立运行（成员、任务板、上下文都隔离）。同一仓库的下一轮需求建议新开会话，
+按下面的启动语把 Lead 拉起来。
 
 **开法：**
 
@@ -114,10 +126,24 @@ cd C:\Users\admin\WeChatProjects\Sinn
 ```powershell
 & .\tools\check-gates.ps1 -Root .      # 文档与任务 DAG
 & .\tools\check-wxapp.ps1 -Root .      # 页面注册 / 包体积 / 动态代码 / 隐私
-npm test                               # jest + miniprogram-simulate（DEV 首个任务负责搭建）
+# 单测（沙箱内 npm test 会 spawn EPERM，用 node 直跑 jest）
+node node_modules\jest\bin\jest.js --runInBand
+# mock 全链路自检（无需真实云/供应商）
+node docs/dev/integration-check.js
+# e2e（真实云 + 开发者工具 connect 模式，需先起 IDE 自动化端口）
+node tests/e2e/run-e2e.js
 ```
 
-## 9. 参考实现
+## 9. demo 收尾前必须处理
+
+- **移除受保护的调试入口**：`bootstrap` / `selftest` / `precheckDebug` / `cleanupSeed` /
+  `cleanupCheck` / `quotaReset` 及 `SINN_SELFTEST` 环境变量（登记见 `docs/dev/DEV-0001.md`
+  「上线前移除清单」）。
+- **清理本地联调临时物**：`.tmp-*`（假 HOME、CLI 登录凭据、探针脚本、截图），均已被 `.gitignore` 排除。
+- **外部解锁项**：轮换已泄露的火山 AK/SK（SEC-01）、开通「图片换装 V2」并实测（CP-04）、
+  真机与人工视觉（CP-11/CP-12）、正式隐私文本（CP-10）、素材（E-7）。
+
+## 10. 参考实现
 
 同级的 `C:\Users\admin\Documents\deepseek-harness\default-workspace\devteam-demo` 是同一套流程
 跑通成绩 CSV 工具的实证（8 源文件、103 单测、88 条用例、196 全绿）。看作业范本读它的
