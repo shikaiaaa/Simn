@@ -1,6 +1,7 @@
+<view class="screen">
 <navigation-bar title="人像采集" back="{{true}}" background="#f7f7f8"></navigation-bar>
 
-<scroll-view scroll-y class="page">
+<scroll-view class="page page-scroll" scroll-y>
   <view class="page-body">
     <view class="card">
       <view class="card-title">人像照片（{{photos.length}}/{{maxPhotos}}）</view>
@@ -72,3 +73,4 @@
     <view class="disclaimer">照片仅用于本次试穿生成，任务数据 23 小时内自动删除。</view>
   </view>
 </scroll-view>
+</view>

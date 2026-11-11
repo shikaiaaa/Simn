@@ -8,16 +8,17 @@ created: 2026-11-10
 updated: 2026-11-11
 ---
 
-# REPORT-0001 · Sinn 微信小程序 QA-0001 测试报告（demo 阶段，v0.3）
+# REPORT-0001 · Sinn 微信小程序 QA-0001 测试报告（demo 阶段，v0.4）
 
-> 对应上游：`docs/qa/TC-0001.md`（v0.8，approved）、`docs/qa/E2E-LOG-0001.md`（v0.7，approved）、
+> 对应上游：`docs/qa/TC-0001.md`（v0.9，approved）、`docs/qa/E2E-LOG-0001.md`（v0.8，approved）、
 > `docs/qa/MATERIALS-0001.md`（v0.2，approved）、`docs/se/SPEC-0001.md`（approved）§G 人工卡点、
 > `docs/dev/DEV-0001.md`（部署与云端缺陷修复记录）。
-> 执行人：QA（agent）；执行时间：**2026-11-11 00:19–00:30 + 补充单例 19:16（Asia/Shanghai）**；v0.1 基线为 2026-11-10 00:19–00:21。
+> 执行人：QA（agent）；执行时间：**2026-11-11 00:19–00:30 + 补充单例 19:16 + task-50 视觉回归补充单例 20:25–20:26（Asia/Shanghai）**；v0.1 基线为 2026-11-10 00:19–00:21。
 > 执行环境：本机沙箱（Windows / Node v24.16.0）+ **真实微信开发者工具（connect 模式）+ 真实云开发环境**；
 > 无真机、无真实试穿供应商账号（`SINN_VENDOR=mock`）、无正式隐私文本。
 > 补充单例使用测试环境数据准备（mock 生成窗口 60s、临时 `sinn_config` 展示上限、测试用户 `usedToday` 归零），
-> 均非产品路径、收尾由 Lead 移除/恢复，详见 `docs/qa/E2E-LOG-0001.md` v0.7 §6.4。
+> 均非产品路径、收尾由 Lead 移除/恢复，详见 `docs/qa/E2E-LOG-0001.md` v0.7 §6.4；
+> task-50 的 L3-010 渲染可见断言补充单例（DEF-0008 回归防线）见 E2E-LOG v0.8 §4.12/§7.6。
 
 ## 结论
 
@@ -34,7 +35,7 @@ L3 端到端 **12 条中 5 条真实执行通过（L3-002/003/009/010/011）、0
 **这是 demo 阶段的预期状态，不是产品质量不合格**：实现侧证据（单测、mock 全链路、真实云部署、4 条真实 e2e、门禁）均已通过，
 剩余缺口全部来自外部环境、资质与人工验收条件。阻塞项、责任方与解锁条件见 §7。
 
-**文档状态说明**：本报告 v0.3 已由 Lead 复核批准置 `status: approved`（2026-11-11）。
+**文档状态说明**：本报告 **v0.4 已由 Lead 复核批准置 `status: approved`（2026-11-11）**。
 `approved` 仅表示文档评审通过，**不代表测试通过**；测试结论始终以本「结论」节为准（仍为「不通过（demo 阶段阻塞）」）。
 
 ## 1. 执行概况
@@ -119,13 +120,13 @@ INTEG_EXIT=0
 | TC-0001-L3-002 | AC-11 | 45.7s | 普通额度 1/1 → 0/1；第 2 次 `2001 E_QUOTA_EXHAUSTED` 拦截并停留衣服页，提示「今日额度已用完，明日 00:00 重置」；`firstTaskId=t_e2a82cfce0912e4251b054ee` |
 | TC-0001-L3-003 | AC-12 | 24.7s | 生成中离开→回首页→点「继续上次生成」→恢复同一 `taskId=resumedTaskId=t_f2949d57ab5245333de3cdfd`；`createTask` 仅 1 次；quota used 0→1；`quotaBefore/After` 由云端 profile 直读（`readQuotaCloud`） |
 | TC-0001-L3-009 | AC-21 | 23.4s | 拒绝后 `chooseMedia=0`；同意后 `requirePrivacyAuthorize=1`；本地 `sinn_consent_v1` 与服务端同意记录一致 |
-| TC-0001-L3-010 | AC-23 | 66.0s | 7/7 页真实渲染（index/consent/capture/garment/generating/result/profile），DOM 扫描 0 处范围外入口 |
+| TC-0001-L3-010 | AC-23 | 66.0s | 7/7 页真实渲染（index/consent/capture/garment/generating/result/profile），DOM 扫描 0 处范围外入口；**v0.4 补充单例 `20261111-202555`（28.7s）新增每页渲染可见断言 7/7 通过（见 E-7）** |
 | TC-0001-L3-011 | AC-25 | 11.2s | 18+/条款未确认时继续按钮 disabled；伪造 `ageConfirmedAt=0` 缓存后仍落 consent 页、`chooseMedia=0` |
 
 - 阻塞（7 条，未执行）：L3-001/004/005/006/007/012（真实供应商 CP-04）、L3-008（cleanup seed）。
 - 证据：`tests/e2e/results/20261111-002136/summary.json`（14,670B，SHA256 `F0400CC364BFD61456488041F6CEAF1CE91218CA0B915B1A92730FF38B4753EC`）、日志 `tests/e2e/results/logs/full-run-final.log`（3,560B，SHA256 `8937EEC77923EE05EB2588C3F518DA25605B50FEDDBB3B1D72C4A3D3E80B1EEB`）；补充单例 `tests/e2e/results/20261111-191613/summary.json`（4,806B，SHA256 `C9ED020DDE57C9206D4F53328B0E65A4A8B97036BFFCE7B76C8728B7174FD7DE`）、`ac12-resume.json`（512B，SHA256 `579F64D50D199EEE10010CA4F0D617BBD01791EEAB320F3A6BF17736583D2928`）、日志 `tests/e2e/results/logs/l3-003-run5.log`（1,648B，SHA256 `BFC5ED62B4779206AF42149020B150D117DD0774874EFFC95924C3B7FD475BCE`）。
 - 样例说明与限制：**L3-002 的生成段使用云端 mock vendor + 合成 smoke 图（非 MAT 固定样张），只验证真实云额度/拦截链路**；L3-003 补充单例使用 `SINN_MOCK_GENERATE_MS=60000` 测试窗口（E2E-LOG §6.4，非产品路径），任务随后按 60s 硬超时 TIMEOUT 属测试配置预期；AC-7/14/15 的真实供应商生成质量未验。connect 模式存在截图陈旧帧限制（T-5），AC-23 以 DOM 扫描结果为准、补充截图取 runId `20261110-225611`；生成中页面操作的 automator 10s 协议超时记为 T-6（测试工具链，见 E2E-LOG §5.1）。
-- 逐条失败修复过程、E2E-B1..B10、工具链 T-1..T-6 见 `docs/qa/E2E-LOG-0001.md` v0.7。
+- 逐条失败修复过程、E2E-B1..B10、工具链 T-1..T-7 见 `docs/qa/E2E-LOG-0001.md` v0.8。
 
 **证据 E-4：强制门禁（本机实跑，均 exit 0）**
 
@@ -137,13 +138,14 @@ ok    TASKS-0001.json: 14 个任务，DAG 合法
 > 说明：v0.2 置 `approved` 时曾复跑得 `10 个文档, FAIL=0, WARN=0`；v0.3 改为 `review` 后复跑，
 > 因本报告与 `RELEASE-CHECKLIST`（review）同时处于审批中间态，出现 1 条「RELEASE-CHECKLIST: 上游 REPORT-0001 尚未 approved」WARN
 > （**FAIL=0**，非内容错误；Lead 复核批准 REPORT-0001 后该 WARN 即清零，v0.2 已实测该机制）。
+> v0.4 为 task-50 增量的 `review` 状态，同样保留该次 WARN=1 中间态；**FAIL=0 是硬性要求**。
 
 ```text
 ok   appid: wx735e60c2c07673aa
-结果: 7 个页面, 0 个分包, 主包 174.6KB / 合计 174.6KB, FAIL=0, WARN=0
+结果: 7 个页面, 0 个分包, 主包 175.1KB / 合计 175.1KB, FAIL=0, WARN=0
 ```
 
-包体积：主包 174.6KB，对 SPEC-0001 §D 内部预算 200KB 占 87.3%（余量 12.7%），平台硬限 2048KB，PASS。
+包体积：主包 **175.1KB**（DEF-0008 修复后 `.screen/.page-scroll` 增量 0.5KB），对 SPEC-0001 §D 内部预算 200KB 占 **87.6%**（余量 12.4%），平台硬限 2048KB，PASS。
 
 **证据 E-5：AC-26 双表映射数值核实（node 直调 `cloudfunctions/sinn-task/lib/size.js` 的 `computeSize`，exit 0）**
 
@@ -168,6 +170,19 @@ ok   appid: wx735e60c2c07673aa
 √ deleteAll：物理删除全部、进行中退款一次、成功任务不退款、保留同意与额度
 √ recordConsent：version 非法/18+ 未确认被拒
 ```
+
+**证据 E-7：DEF-0008 渲染回归防线（task-50，L3-010 v0.9 视觉断言，本机实跑 exit 0）**
+
+```text
+[通过] TC-0001-L3-010 (AC-23)
+汇总: 期望 1 条 / 通过 1 / 失败 0 / 阻塞 0
+证据: tests/e2e/results/20261111-202555/summary.json
+```
+
+- runId `20261111-202555`（2026-11-11 20:25:55–20:26:28 Asia/Shanghai，28.7s，connect `ws://127.0.0.1:9436`，7 页巡检不消耗额度）；7/7 页通过**渲染可见断言**：像素 `darkRatio/contentDarkRatio/contentEdgeRatio` + 必需选择器 + `.screen/.page-scroll/.page-body` 布局 rect；7 张截图哈希互异。
+- 逐页统计：index dark 0.0857/content 0.0690/edge 0.0909；consent .0605/.0379/.0783；capture .0675/.0474/.1026；garment .0513/.0288/.0759；generating .0747/.0561/.0603；result .0697/.0503/.0370；profile .0711/.0525/.1277。
+- 证据哈希：`summary.json` 15,381B `871829D949B5075D34A86892DAC45D20886F693536890F565463BC1647FDC86F`；`ac23-entries.json` 9,246B `B47DA11039C63F746A4C98B77220C178AD3BDD2673B4F4487A43828788DE645A`；7 张截图与日志哈希见 E2E-LOG v0.8 §7.6。
+- 意义：DEF-0008（Skyline 四页 scroll-view 无高度白屏）在 7 轮既有 e2e 中漏检，本断言补上「路由可达 ≠ 页面已绘制」的防线；修复前基线（index dark 0.0413/content 0.019/edge≈0）会被阈值拒绝。
 
 ## 2. AC-1..AC-26 汇总
 
@@ -197,8 +212,8 @@ ok   appid: wx735e60c2c07673aa
 | AC-19 | 部分 | `result-page.test.js` 二次确认/取消不删/404 按成功；integration step7 | L3-006 真云删除因真实供应商阻塞 |
 | AC-20 | 阻塞 | `handler.test.js` 物理删/`deletedAt`/重复 404/`auditTask exists=false`；integration step7/8/9；真实触发器已实测执行清理（DEV-0001 §41） | 真实云存储对象 **HEAD 404** 未验证（audit 白名单未配）；L3-007/008 阻塞 |
 | AC-21 | 通过（有限制） | **L3-009 真实云通过**（拒绝→`chooseMedia=0`、授权 1 次、记录一致）；`consent-service.test.js`/`consent-page.test.js`、`profile-page.test.js` 撤回 | 后台隐私指引已配置（E2E-B4 解除）；**正式文本核对（L4-005）仍属 CP-10 人工项**，不影响本轮 L2/L3 判定 |
-| AC-22 | 通过 | G-001/002/003（双门禁实跑、包体积 174.6KB/200KB=87.3%、工程边界/禁用 API） | 无 |
-| AC-23 | 通过（有限制） | **L3-010 真实云通过**（7/7 页真实渲染、DOM 0 命中）；`result-page.test.js`/`profile-page.test.js` 静态断言、`size.test.js` 禁词 | L2-025/026 仍待固化（QA-0002），静态断言已存在；截图受 T-5 限制 |
+| AC-22 | 通过 | G-001/002/003（双门禁实跑、包体积 **175.1KB**/200KB=87.6%、工程边界/禁用 API） | 无 |
+| AC-23 | 通过（有限制） | **L3-010 真实云通过**（7/7 页真实渲染、DOM 0 命中）；**v0.4 补充单例 `20261111-202555` 新增每页渲染可见断言 7/7 通过（E-7）**；`result-page.test.js`/`profile-page.test.js` 静态断言、`size.test.js` 禁词 | L2-025/026 仍待固化（QA-0002），静态断言已存在；connect 截图仍有 T-5 陈旧帧风险，判定以像素/DOM + 本轮有效截图为准 |
 | AC-24 | 阻塞 | `garment-page.test.js` 四类拦截 3008/3009/3010/3011（createTask 0 次）、`precheck.test.js` | 真实样张与真实供应商预检能力；CP-04 + MAT |
 | AC-25 | 通过（有限制） | **L3-011 真实云通过**（18+ 门禁 + ageConfirmedAt=0 回归）；`consent-service.test.js`/`capture-page.test.js` | 真机人工走查（L4-006）仍属 CP-12 人工项 |
 | AC-26 | 通过 | `size.test.js`、E-5 三 gender 直调核实、`result-page.test.js` 三 gender 展示（部分） | 无（L2-031/032 待固化不影响本轮 L1 判定） |
@@ -213,7 +228,7 @@ ok   appid: wx735e60c2c07673aa
 |---|---|---|---|---|---|
 | L1 单元 | 16 | 16 | 0 | 0 | jest 27 suites / 359 tests 全绿（2026-11-11；task-44 移除调试入口后） |
 | L2 组件-页面 | 33 | 25 | 8 | 0 | 待固化：L2-002/003/004/005/025/026/031/032（见 TC §4、§8） |
-| L3 端到端 | 12 | **5** | 0 | **7** | runId `20261111-002136`（4 通过）+ 补充单例 `20261111-191613`（L3-003）；通过 L3-002/003/009/010/011 |
+| L3 端到端 | 12 | **5** | 0 | **7** | runId `20261111-002136`（4 通过）+ 补充单例 `20261111-191613`（L3-003）+ 视觉回归补充单例 `20261111-202555`（L3-010 渲染可见断言）；通过 L3-002/003/009/010/011 |
 | L4 人工 | 6 | 0 | 0 | 6 | 人工视觉/真机/隐私文本，见 §8 |
 | G 门禁 | 3 | 3 | 0 | 0 | check-gates / check-wxapp / 工程边界扫描 |
 | **合计** | **70** | **49** | **8** | **13** | 失败 0 |
@@ -226,6 +241,7 @@ ok   appid: wx735e60c2c07673aa
 |---|---|---|---|---|
 | DEF-0004 | 真实云 precheck 写库报 `-502001`：assetRegister 初始化 `precheck:null`，handler `updateAsset` 深合并写 `precheck.at` → `Cannot create field 'at' in element {precheck: null}`，被最外层包装为 `E_INTERNAL 9000`（task-37） | `updateDoc` 对顶层对象字段改用 `db.command.set` 整字段替换；assetRegister 不再写 `precheck:null`；fake db 单测复现 | precheckDebug 定位 `failedStep=step6_updateAsset`；修复后同一 assetId 直调 precheck 返回 `ok:true/status=pass/12 checks`，证据 `tests/e2e/results/precheck-recheck-20261110151321.json`（SHA256 `3917C247…3E0CEE7`） | 已修复 · 复核通过 |
 | DEF-0005 | mock vendor 跨 invocation 状态丢失：云函数每次调用新建 adapter，内存 `tasks` 不共享 → createTask 的 `vt_1` 在 taskGet 中不存在 → `query` reject → 5001（task-38） | mock vendor 改无状态：`vt_<base36(submittedAt)>_<seq>` + 时间推导状态；结果图为合法 2048×3072 PNG | 修复后 L3-002 于 `20261111-002136` 真实通过；证据见 E2E-LOG v0.7 §3.1/§4 | 已修复 · 复核通过 |
+| DEF-0008 | Skyline 下 index/consent/capture/garment 四页 `scroll-view` 未给确定高度 → 只布局不绘制，整页只剩导航栏标题（task-49；此前 7 轮 e2e 均漏检，Lead 像素统计发现） | `app.wxss` 新增 `.screen`（100vh flex 列）+ `.page-scroll`（flex:1;min-height:0），四页 wxml 包裹；保留 scroll-view 以维持长页滚动；包体积 174.6→175.1KB | **v0.4 新增 L3-010 渲染可见断言**：补充单例 `20261111-202555` 7/7 页通过像素（dark/content/edge）+ 选择器 + 布局 rect 断言，7 张截图哈希互异；修复前基线会被阈值拒绝。证据 E-7 / E2E-LOG v0.8 §4.12/§7.6 | 已修复 · 复核通过（真机未复验） |
 
 ### 4.2 历史缺陷复核（DEF-0001..DEF-0003）
 
@@ -350,19 +366,20 @@ ok   appid: wx735e60c2c07673aa
 
 | 证据 | 路径 | 说明/哈希 |
 |---|---|---|
-| TC 用例与 AC 映射 | `docs/qa/TC-0001.md`（v0.8，approved） | 70 条用例、26/26 AC 映射；L3 5 通过/7 阻塞已同步 E2E-LOG v0.7 |
-| e2e 执行记录 | `docs/qa/E2E-LOG-0001.md`（v0.7，approved） | 12 条合并 5 通过/0 失败/7 阻塞、E2E-B1..B10、T-1..T-6、测试环境数据准备 §6.4、L3-003 证据 §7.5 |
+| TC 用例与 AC 映射 | `docs/qa/TC-0001.md`（v0.9，approved） | 70 条用例、26/26 AC 映射；L3 5 通过/7 阻塞已同步 E2E-LOG v0.7；v0.9 增补 L3-010 渲染可见断言 |
+| e2e 执行记录 | `docs/qa/E2E-LOG-0001.md`（v0.8，approved） | 12 条合并 5 通过/0 失败/7 阻塞、E2E-B1..B10、T-1..T-7、测试环境数据准备 §6.4、L3-003 证据 §7.5、L3-010 视觉断言证据 §7.6/DEF-0008 §4.12 |
 | 测试素材清单 | `docs/qa/MATERIALS-0001.md`（v0.2，approved） | MAT-01..09 路径/尺寸/SHA256/许可；MAT-10..15 仍缺 |
 | e2e 结果摘要（最终全量） | `tests/e2e/results/20261111-002136/summary.json` | 14,670B；SHA256 `F0400CC364BFD61456488041F6CEAF1CE91218CA0B915B1A92730FF38B4753EC` |
 | e2e 结果摘要（L3-003 补充单例） | `tests/e2e/results/20261111-191613/summary.json` | 4,806B；SHA256 `C9ED020DDE57C9206D4F53328B0E65A4A8B97036BFFCE7B76C8728B7174FD7DE` |
+| e2e 结果摘要（L3-010 视觉回归补充单例） | `tests/e2e/results/20261111-202555/summary.json` | 15,381B；SHA256 `871829D949B5075D34A86892DAC45D20886F693536890F565463BC1647FDC86F`；7/7 页渲染可见断言通过 |
 | L3-003 恢复证据 | `tests/e2e/results/20261111-191613/TC-0001-L3-003/ac12-resume.json` | 512B；SHA256 `579F64D50D199EEE10010CA4F0D617BBD01791EEAB320F3A6BF17736583D2928`；taskId=resumedTaskId、quota 0→1 |
 | e2e 运行日志（最终全量） | `tests/e2e/results/logs/full-run-final.log` | 3,560B；SHA256 `8937EEC77923EE05EB2588C3F518DA25605B50FEDDBB3B1D72C4A3D3E80B1EEB` |
 | L3-002 证据 | `tests/e2e/results/20261111-002136/TC-0001-L3-002/ac11-normal.json` | 1,288B；SHA256 `AF999C92EA5DF772CDDCE149B802BD016790EA416A16A99AFEE57FDEC3C9B775` |
 | precheck 修复复测（DEF-0004） | `tests/e2e/results/precheck-recheck-20261110151321.json` | 2,221B；SHA256 `3917C247BB64EB0B9B05E8742F37FF63134BA3902791158706DC324FF3E0CEE7` |
 | 全链路自检 | `docs/dev/integration-check.js` / `docs/dev/integration-check-result.json` | 10/10 PASS（2026-11-11 复跑）；生成物由 DEV 侧维护 |
 | 单测 | `tests/unit/**` | 27 suites / 359 tests，jest 全绿，exit 0（task-44 移除前为 32/419） |
-| 门禁 | `tools/check-gates.ps1`、`tools/check-wxapp.ps1` | FAIL=0；主包 174.6KB（87.3% / 200KB） |
-| 云端部署与缺陷记录 | `docs/dev/DEV-0001.md` | §DEV-0001-31/§DEV-0001-35/§DEV-0001-37/§DEV-0001-38/§DEV-0001-39/§DEV-0001-41；B-1/B-2/B-3 |
+| 门禁 | `tools/check-gates.ps1`、`tools/check-wxapp.ps1` | FAIL=0；主包 **175.1KB**（87.6% / 200KB） |
+| 云端部署与缺陷记录 | `docs/dev/DEV-0001.md` | §DEV-0001-31/§DEV-0001-35/§DEV-0001-37/§DEV-0001-38/§DEV-0001-39/§DEV-0001-41/§DEV-0001-43；B-1/B-2/B-3 |
 | 发布检查单 | `docs/qa/RELEASE-CHECKLIST.md` | 自动化项更新；人工项留空；整体未就绪 |
 
 ## 12. 变更记录
@@ -375,3 +392,5 @@ ok   appid: wx735e60c2c07673aa
 | v0.2（审批） | 2026-11-11 | Lead 复核通过（全文 353 行）：status review → **approved**。**approved 仅表示文档评审状态，不代表测试通过**；结论仍为「不通过（demo 阶段阻塞）」，AC 12/3/11/0、用例 48/8/14 不变。Lead 确认「阻塞 18（v0.1 旧口径）→ 14」换算正确（48+8+14=70），无需回改。 |
 | v0.3 | 2026-11-11 | 基于 task-46/48 增量重算：**L3-003（AC-12）真实云补充单例通过**（runId `20261111-191613`，24.7s，taskId=resumedTaskId、createTask 1 次、quota 0→1）→ L3 合并 5 通过/0 失败/7 阻塞；AC 汇总 13 通过/2 部分/11 阻塞/0 不通过（AC-12 上调）；用例 49/8/13=70（真实执行率 70.0%）；**SEC-01 关闭**（旧 AK/SK 已轮换，新密钥仅环境变量）；E-7 部分解除（MAT-01..09 已固化，MAT-10..15 仍缺）；新增 §4.4 已知限制（DEF-0007 低危配置双源、T-6 automator 协议超时、测试环境数据准备）；CP-04b/CP-12/E2E-B7/§9/§10/§11 同步更新；结论保持「不通过（demo 阶段阻塞）」。status 由 approved → review（待 Lead 复核 v0.3，agent 不自行 approved）。 |
 | v0.3（审批） | 2026-11-11 | Lead 复核通过并批准：status review → **approved**。**approved 仅表示文档评审通过，不代表测试通过**；结论仍为「不通过（demo 阶段阻塞）」。按 Lead 指令修正 L1 数字为 **27 suites / 359 tests**（task-44 移除 6 个调试入口/5 个调试单测套件后；历史 32/419 为移除前基线，见 DEV-0001 §42），涉及结论段、§1.2、E-1、§3、§11 同步一致；AC 13/2/11/0、用例 49/8/13、e2e 5/0/7、SEC-01/E-7 等结论不变。 |
+| v0.4 | 2026-11-11 | task-50：新增 **DEF-0008**（Skyline 四页 scroll-view 无高度白屏，task-49 修复）记录与 **E-7 渲染回归防线证据**——L3-010（AC-23）每页新增像素 dark/content/edge + 必需选择器 + 布局 rect 三判据，补充单例 `20261111-202555`（28.7s，connect 9436）7/7 页通过；同步 §1.3 E-3/E-4（门禁 11 文档 FAIL=0/WARN=1、主包 175.1KB/87.6%）、§2 AC-23 行、§3 L3 行、§4.1 缺陷表、§11 证据索引；AC 汇总 13/2/11/0、用例 49/8/13、e2e 5/0/7、结论「不通过（demo 阶段阻塞）」均不变。status 由 approved → **review**（待 Lead 复核 v0.4，agent 不自行 approved）。 |
+| v0.4（审批） | 2026-11-11 | Lead 复核通过并批准：status review → **approved**。**approved 仅表示文档评审通过，不代表测试通过**；结论仍为「不通过（demo 阶段阻塞）」。确认 L3-010 三判据（像素 + 必需选择器 + 布局 rect）、7/7 页真实可见、runId `20261111-202555`、7 页截图哈希互异；DEF-0008 记录口径认可。AC 13/2/11/0、用例 49/8/13、e2e 5/0/7 均不变。 |

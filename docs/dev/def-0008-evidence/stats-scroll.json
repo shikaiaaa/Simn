@@ -1,0 +1,47 @@
+{
+  "mode": "scroll",
+  "ws": "ws://127.0.0.1:9434",
+  "results": [
+    {
+      "page": "pages/consent/consent",
+      "scrollInto": "consent-submit",
+      "rectBefore": {
+        "top": 1061.300048828125,
+        "bottom": 1111.300048828125,
+        "height": 50
+      },
+      "rectAfter": {
+        "top": 657.5999145507812,
+        "bottom": 707.5999145507812,
+        "height": 50
+      },
+      "name": "after-consent-step2-scrolled",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-consent-step2-scrolled.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.0909,
+      "contentDarkRatio": 0.0704
+    },
+    {
+      "page": "pages/capture/capture",
+      "scrollInto": "capture-bottom",
+      "rectBefore": {
+        "top": 881.5999755859375,
+        "bottom": 931.5999755859375,
+        "height": 50
+      },
+      "rectAfter": {
+        "top": 739.699951171875,
+        "bottom": 789.699951171875,
+        "height": 50
+      },
+      "name": "after-capture-scrolled",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-capture-scrolled.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.0681,
+      "contentDarkRatio": 0.0481
+    }
+  ],
+  "errors": []
+}

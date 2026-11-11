@@ -1,0 +1,16 @@
+{
+  "mode": "minimal",
+  "ws": "ws://127.0.0.1:9434",
+  "results": [
+    {
+      "page": "pages/index/index",
+      "name": "after-index-minimal",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-index-minimal.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.086,
+      "contentDarkRatio": 0.0689
+    }
+  ],
+  "errors": []
+}

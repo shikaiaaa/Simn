@@ -1,0 +1,16 @@
+{
+  "mode": "before",
+  "ws": "ws://127.0.0.1:9434",
+  "results": [
+    {
+      "page": "pages/index/index",
+      "name": "before-index",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\before-index.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.0413,
+      "contentDarkRatio": 0.019
+    }
+  ],
+  "errors": []
+}

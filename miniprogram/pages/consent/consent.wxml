@@ -1,6 +1,7 @@
 <!--consent.wxml：18+ 声明 + 8 项隐私披露 + 单独同意（DEV-0001-05）-->
+<view class="screen">
 <navigation-bar title="18+ 与隐私同意" back="{{true}}" color="black" background="#f7f7f8"></navigation-bar>
-<scroll-view class="page" scroll-y type="list">
+<scroll-view class="page page-scroll" scroll-y type="list">
   <view class="page-body">
     <view class="card">
       <block wx:if="{{step === 1}}">
@@ -44,3 +45,4 @@
     <view class="footer-tip text-secondary">{{draftNotice}}</view>
   </view>
 </scroll-view>
+</view>

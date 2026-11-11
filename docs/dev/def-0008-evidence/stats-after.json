@@ -1,0 +1,79 @@
+{
+  "mode": "after",
+  "ws": "ws://127.0.0.1:9434",
+  "results": [
+    {
+      "page": "pages/index/index",
+      "name": "after-index",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-index.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.086,
+      "contentDarkRatio": 0.0689
+    },
+    {
+      "page": "pages/consent/consent",
+      "name": "after-consent-step1",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-consent-step1.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.0605,
+      "contentDarkRatio": 0.0379
+    },
+    {
+      "page": "pages/consent/consent",
+      "name": "after-consent-step2",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-consent-step2.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.1012,
+      "contentDarkRatio": 0.084
+    },
+    {
+      "page": "pages/capture/capture",
+      "name": "after-capture",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-capture.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.0675,
+      "contentDarkRatio": 0.0474
+    },
+    {
+      "page": "pages/garment/garment",
+      "name": "after-garment",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-garment.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.0513,
+      "contentDarkRatio": 0.0287
+    },
+    {
+      "page": "pages/result/result",
+      "name": "after-result",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-result.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.0434,
+      "contentDarkRatio": 0.0204
+    },
+    {
+      "page": "pages/profile/profile",
+      "name": "after-profile",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-profile.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.0711,
+      "contentDarkRatio": 0.0525
+    },
+    {
+      "page": "pages/generating/generating",
+      "name": "after-generating",
+      "file": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0008-evidence\\after-generating.png",
+      "width": 231,
+      "height": 497,
+      "darkRatio": 0.051,
+      "contentDarkRatio": 0.0296
+    }
+  ],
+  "errors": []
+}

@@ -20,6 +20,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const h = require('./harness');
+const pngStats = require('./png-stats');
 
 /** TC-0001 §5 固定素材（路径相对 tests/fixtures/；MAT-01..MAT-09 已固化，SHA 见 MATERIALS-0001.md）。 */
 const MAT = {
@@ -776,6 +777,7 @@ const CASES = [
     ],
     async run(ctx) {
       const { mp } = ctx;
+      const calibrate = process.env.SINN_E2E_VISUAL_CALIBRATE === '1';
       // 先撤销服务端同意，确保 consent 页可真实渲染而非被重定向跳过。
       const reset = await resetConsentState(mp);
       const forbidden = [/分享/, /保存到相册/, /保存相册/, /价格/, /购买/, /下单/, /商家/, /包邮/, /3D/i, /旋转/, /形象库/, /扫码/];
@@ -841,6 +843,80 @@ const CASES = [
         }
       }
 
+      // 页面「真实绘制」判据（DEF-0008 回归防线）：
+      // - 主判据 = 像素统计（darkRatio / contentDarkRatio）。DEF-0008 下路由、DOM 元素都正常，
+      //   仅 Skyline 不绘制，因此**只有像素能区分「已绘制」与「白屏只剩导航栏」**；纯选择器断言会漏检。
+      // - 辅助判据 = 必须存在的选择器 + 布局 rect（.screen / .page-scroll / .page-body），
+      //   用于把失败直接定位到「元素缺失」还是「布局高度为 0」。
+      // - 阈值来自 2026-11-11 task-49 修复后两轮实测：
+      //   标定轮 runId 20261111-202346（SINN_E2E_VISUAL_CALIBRATE=1）得到每页
+      //   dark/content/edge 三组实测值（见 §5.1/T-5 与 E2E-LOG v0.8），再留约 15–40% 余量；
+      //   修复前基线（DEV 复现）index 为 dark 0.0413 / content 0.019 / edge≈0，会被下列阈值拒绝。
+      const VISUAL_SPECS = {
+        '/pages/index/index': { screen: true, minDark: 0.055, minContent: 0.035, minEdge: 0.03, requiredSelectors: ['.page-body'] },
+        '/pages/consent/consent': { screen: true, minDark: 0.045, minContent: 0.025, minEdge: 0.02, requiredSelectors: ['.check-row', '.btn-primary'] },
+        '/pages/capture/capture': { screen: true, minDark: 0.045, minContent: 0.03, minEdge: 0.03, requiredSelectors: ['.photo-add', '.field-input'] },
+        '/pages/garment/garment': { screen: true, minDark: 0.042, minContent: 0.022, minEdge: 0.02, requiredSelectors: ['.garment-add', '.btn-primary'] },
+        '/pages/generating/generating': { screen: false, minDark: 0.045, minContent: 0.02, minEdge: 0.02, requiredAny: ['.generating-stage', '.generating-error-title'] },
+        '/pages/result/result': { screen: false, minDark: 0.045, minContent: 0.03, minEdge: 0.012, requiredAny: ['.result-error-text', '#zoom-view', '.placeholder'] },
+        '/pages/profile/profile': { screen: false, minDark: 0.045, minContent: 0.03, minEdge: 0.03, requiredSelectors: ['.quota-number'] },
+      };
+
+      async function layoutOf() {
+        return h.evaluate(mp, function () {
+          return new Promise(function (resolve) {
+            var pages = getCurrentPages();
+            var cur = pages[pages.length - 1];
+            var q = wx.createSelectorQuery().in(cur);
+            q.select('.screen').boundingClientRect();
+            q.select('.page-scroll').boundingClientRect();
+            q.select('.page-body').boundingClientRect();
+            q.exec(function (res) {
+              function pick(r) {
+                return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
+              }
+              resolve({ screen: pick(res[0]), pageScroll: pick(res[1]), pageBody: pick(res[2]) });
+            });
+          });
+        });
+      }
+
+      async function missingSelectors(page, spec) {
+        const missing = [];
+        for (const sel of spec.requiredSelectors || []) {
+          const els = await page.$$(sel).catch(() => []);
+          if (!els || els.length === 0) missing.push(sel);
+        }
+        if (spec.requiredAny && spec.requiredAny.length) {
+          let found = false;
+          for (const sel of spec.requiredAny) {
+            const els = await page.$$(sel).catch(() => []);
+            if (els && els.length) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) missing.push(`任一：${spec.requiredAny.join(' | ')}`);
+        }
+        return missing;
+      }
+
+      // 截图可能拿到滞后帧（T-5/T-6 同类限制）：低于通用下限时等待 900ms 重截一次，再按阈值判定。
+      async function shotAndStats(name) {
+        let rel = await h.screenshot(mp, ctx.runDir, name);
+        let stats = rel ? pngStats.imageStats(path.join(h.ROOT, rel)) : null;
+        if (!stats || stats.darkRatio < 0.03) {
+          await h.sleep(900);
+          const retry = await h.screenshot(mp, ctx.runDir, name);
+          if (retry) {
+            rel = retry;
+            stats = pngStats.imageStats(path.join(h.ROOT, retry));
+          }
+        }
+        const sha256 = rel ? crypto.createHash('sha256').update(fs.readFileSync(path.join(h.ROOT, rel))).digest('hex').toUpperCase() : null;
+        return { screenshot: rel, stats, screenshotSha256: sha256 };
+      }
+
       try {
         for (const item of routes) {
           await seedFor(item.seed);
@@ -850,7 +926,14 @@ const CASES = [
             continue;
           }
           const page = launched.page;
+          const routeKey = h.normalizeRoute(item.route);
           const actualRoute = h.normalizeRoute(page.path);
+          const spec = VISUAL_SPECS[routeKey] || {
+            screen: false,
+            minDark: 0.03,
+            minContent: 0.01,
+            requiredSelectors: ['.page-body'],
+          };
           const buttons = await page.$$('button');
           const texts = [];
           for (const b of buttons) {
@@ -862,14 +945,74 @@ const CASES = [
           const hits = [];
           for (const t of texts) for (const re of forbidden) if (re.test(t)) hits.push(t);
           if (hits.length) throw new Error(`[assert] ${item.route} 出现范围外入口文案：${hits.join(' | ')}`);
+
+          // ---- 渲染可见断言（DEF-0008 回归）：DOM + 布局 rect + 像素统计，任一不满足即失败 ----
+          // generating/result 等页面有异步状态（生成中→错误态 / 加载中→错误文案），首次采样可能落在
+          // 中间帧；失败时等待 1.5s 重取一次（rects/选择器/截图），二次仍失败才判定为渲染回归。
+          let rects;
+          let missing;
+          let shot;
+          let visualErrors = [];
+          for (let attempt = 1; attempt <= 2; attempt += 1) {
+            rects = await layoutOf();
+            missing = await missingSelectors(page, spec);
+            shot = await shotAndStats(`ac23-${routeKey.split('/').pop()}`);
+            visualErrors = [];
+            if (missing.length) visualErrors.push(`缺少选择器：${missing.join(', ')}`);
+            // 新 `.screen`(100vh flex) + `.page-scroll`(flex:1) 结构下滚动容器必须是正高度；
+            // 旧断言从未校验 rect，这里补上，避免「布局有、高度 0」再次漏检。
+            if (!rects.pageBody || rects.pageBody.height < 100) {
+              visualErrors.push(`.page-body rect 异常：${JSON.stringify(rects.pageBody)}`);
+            }
+            if (spec.screen) {
+              if (!rects.screen || rects.screen.height < 400) visualErrors.push(`.screen rect 异常：${JSON.stringify(rects.screen)}`);
+              if (!rects.pageScroll || rects.pageScroll.width < 100 || rects.pageScroll.height < 100) {
+                visualErrors.push(`.page-scroll rect 异常：${JSON.stringify(rects.pageScroll)}`);
+              }
+            }
+            if (!shot.stats) {
+              visualErrors.push('截图缺失，无法做像素统计');
+            } else {
+              if (shot.stats.darkRatio < spec.minDark) visualErrors.push(`darkRatio=${shot.stats.darkRatio} < ${spec.minDark}`);
+              if (shot.stats.contentDarkRatio < spec.minContent) {
+                visualErrors.push(`contentDarkRatio=${shot.stats.contentDarkRatio} < ${spec.minContent}`);
+              }
+              if (spec.minEdge && shot.stats.contentEdgeRatio < spec.minEdge) {
+                visualErrors.push(`contentEdgeRatio=${shot.stats.contentEdgeRatio} < ${spec.minEdge}`);
+              }
+            }
+            if (calibrate) {
+              console.log('[visual-calibrate]', actualRoute, JSON.stringify({ stats: shot.stats, rects, missing }));
+            }
+            if (!visualErrors.length || calibrate) break;
+            if (attempt === 1) {
+              console.log('[visual-retry]', actualRoute, '首次采样未通过，1.5s 后复核：', visualErrors.join('；'));
+              await h.sleep(1500);
+            }
+          }
+          if (visualErrors.length && !calibrate) {
+            throw new Error(
+              `[assert] ${actualRoute} 页面未真实绘制（疑似 DEF-0008 回归）：${visualErrors.join('；')}；` +
+                `pagePath=${actualRoute}；screenshot=${shot.screenshot || 'null'}；stats=${JSON.stringify(shot.stats)}；rects=${JSON.stringify(rects)}`
+            );
+          }
           visited.push({
             route: item.route,
             actualRoute,
-            redirected: actualRoute !== h.normalizeRoute(item.route),
+            redirected: actualRoute !== routeKey,
             launched: true,
             attempts: launched.attempt,
             buttons: texts,
-            screenshot: await h.screenshot(mp, ctx.runDir, `ac23-${h.normalizeRoute(item.route).split('/').pop()}`),
+            visual: {
+              thresholds: { minDark: spec.minDark, minContent: spec.minContent, minEdge: spec.minEdge || 0 },
+              stats: shot.stats,
+              rects,
+              requiredSelectors: spec.requiredSelectors || [],
+              requiredAny: spec.requiredAny || [],
+              errors: visualErrors,
+            },
+            screenshot: shot.screenshot,
+            screenshotSha256: shot.screenshotSha256,
           });
 
           // consent 页扫完后必须完成同意，后续 capture/garment 等页面才不会被重定向回 consent。
@@ -892,6 +1035,13 @@ const CASES = [
       if (launchedPages.length !== routes.length) {
         const missing = visited.filter((v) => !v.launched).map((v) => `${v.route}（${v.error}）`);
         throw new Error(`[assert] AC-23 要求 7 页真实渲染后扫描；仅 ${launchedPages.length}/${routes.length} 页完成，未完成：${missing.join('；')}`);
+      }
+
+      // 第二道防线：7 页截图不应完全相同（相同 = 陈旧帧或同一画面，无法证明逐页绘制）。
+      const shotHashes = launchedPages.map((v) => v.screenshotSha256).filter(Boolean);
+      const duplicateHashes = shotHashes.filter((hash, index) => shotHashes.indexOf(hash) !== index);
+      if (duplicateHashes.length && !calibrate) {
+        throw new Error(`[assert] AC-23 页面截图哈希重复（疑似陈旧帧/同一画面）：${[...new Set(duplicateHashes)].join(', ')}`);
       }
 
       const evidence = { reset, tabBar: null, visited };

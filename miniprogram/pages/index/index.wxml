@@ -1,6 +1,7 @@
 <!--index.wxml-->
+<view class="screen">
 <navigation-bar title="Sinn" back="{{false}}" color="black" background="#f7f7f8"></navigation-bar>
-<scroll-view class="page" scroll-y type="list">
+<scroll-view class="page page-scroll" scroll-y type="list">
   <view class="page-body">
     <view class="hero">
       <view class="hero-title">2D 虚拟试穿</view>
@@ -22,3 +23,4 @@
     <view class="text-secondary footer-tip">内部演示版本</view>
   </view>
 </scroll-view>
+</view>
