@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-11-10T16:30:28.540Z",
+  "environment": {
+    "cloudEnv": "not-provided (CP-02)",
+    "vendor": "mock (SINN_VENDOR=mock)",
+    "realDevice": "not-available",
+    "devtoolsAutomator": "blocked (sandbox EPERM)"
+  },
+  "clock": 1794196801620,
+  "results": [
+    {
+      "step": "1. 首页读取 profile（未同意）",
+      "status": "pass",
+      "detail": "consent=null, quota=5/5"
+    },
+    {
+      "step": "2. consent 两步同意 + recordConsent + 本地缓存",
+      "status": "pass",
+      "detail": "版本=2026-11-09-v1，审计仅含用户/版本/时间/hash"
+    },
+    {
+      "step": "3. 人像采集（上传+assetRegister 幂等+服务端 precheck+表单）",
+      "status": "pass",
+      "detail": "asset=a_b98bb22a7915987f2a13d679，预检 status=pass，metrics.gender=male"
+    },
+    {
+      "step": "4. 衣服采集 + createTask（预扣额度/单活跃/参数校验）",
+      "status": "pass",
+      "detail": "taskId=t_f69fbebbb59e69f6953384ca，remaining=4"
+    },
+    {
+      "step": "5. 生成轮询（阶段/等待秒数/SUCCEEDED+转存）",
+      "status": "pass",
+      "detail": "seen=GENERATING→SUCCEEDED，waitedSec=1，result=cloud://mock-env/sinn/result/t_f69fbebbb59e69f6953384ca.png"
+    },
+    {
+      "step": "6. 结果页数据（服务端 sizeResult 格式化/AI 标识/降级提示）",
+      "status": "pass",
+      "detail": "range=L–XL，standard=标准：GB/T 1335.1，disclaimer 合规"
+    },
+    {
+      "step": "7. 删除本次（物理删对象+记录，重复查询 404，auditTask exists=false）",
+      "status": "pass",
+      "detail": "deletedAt=1794196801500，对象删除 3 个，任务记录 0"
+    },
+    {
+      "step": "8. 删除全部（物理全删/幂等/保留同意审计）",
+      "status": "pass",
+      "detail": "deletedTasks=1，deletedAssets=2，二次 deletedTasks=0"
+    },
+    {
+      "step": "9. sinn-cleanup 到期物理清理（无墓碑、对象+记录全删）",
+      "status": "pass",
+      "detail": "scanned=1，deleted=1，failed=0"
+    },
+    {
+      "step": "10. 额度与同意状态（删除后保留已用额度、同意记录可查询）",
+      "status": "pass",
+      "detail": "used=2，consent=2026-11-09-v1"
+    }
+  ],
+  "passed": 10,
+  "blocked": 0,
+  "failed": 0
+}

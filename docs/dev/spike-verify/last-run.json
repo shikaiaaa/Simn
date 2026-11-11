@@ -1,0 +1,321 @@
+{
+  "generatedAt": "2026-11-09T15:20:28.926Z",
+  "node": "v24.16.0",
+  "total": 46,
+  "passed": 46,
+  "failed": 0,
+  "groups": [
+    {
+      "name": "zoom-math（S2 缩放数学，Node 纯函数）",
+      "total": 13,
+      "passed": 13,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "常量：1x-3x",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "clamp",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "distance / midpoint",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "初始/复位状态：scale=1, x=0, y=0",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "fitSize：2000x3000 图片放入 375x500 视口 → 333.33x500",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "maxTranslation：scale=2、内容 333.33x500、视口 375x500",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "zoomAt：focal 锚点在缩放前后指向同一内容坐标",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "zoomAt：scale 越界被夹到 [1,3]",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "panBy：未放大时不可拖出视口",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "panBy：放大 2x 后平移被限制在边界内",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "transformOf：仅 translate + 等比 scale（不变形）",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "模拟 60 帧双指捏合：scale 单调递增且始终在 [1,3]、不越界",
+          "status": "pass",
+          "detail": "finalScale=3.000"
+        },
+        {
+          "name": "双指捏合后单指平移，复位回到初始状态",
+          "status": "pass",
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "name": "image-prep（端上预处理纯函数，Node）",
+      "total": 13,
+      "passed": 13,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "模块加载不依赖 wx（纯函数可在 Node 运行）",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "常量：长边 4096 / 10MB / JPEG 质量 90",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "EXIF orientation 映射（8 种）",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "isJpegLike：jpg/JPEG 为真，png/heic 为假",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "computeResize：8000x6000 → 4096x3072",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "computeResize：4000x2000 不缩放",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "orientedSize：EXIF left 交换宽高（4000x3000 → 3000x4000）",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "planPhotoProcessing：干净 JPG（1200x1600, 2MB, up）无需处理",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "planPhotoProcessing：PNG 5000x7000 + EXIF left + 11MB → 四类问题齐全",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "planPhotoProcessing：EXIF left 后长边方向正确（3000x4000 无需缩放）",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "validateForUpload：过小图片判 too_small",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "validateForUpload：缺尺寸判 invalid_dimensions（同时命中 too_small）",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "validateForUpload：12MB JPG 可上传，但计划强制压缩",
+          "status": "pass",
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "name": "mock-vendor（VendorAdapter 契约 / 状态机 / 物理删除 / 时延分解）",
+      "total": 12,
+      "passed": 12,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "供应商档位与错误码表",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "name": "health：适配器能力声明（6 个契约方法 + 两档分辨率）",
+          "status": "pass",
+          "detail": "MOCK_ONLY"
+        },
+        {
+          "name": "validate：全部通过用例（10 项 pass）",
+          "status": "pass",
+          "detail": "10/10 pass"
+        },
+        {
+          "name": "validate：无法判断维度返回 unknown（Mock 不冒充真实预检）",
+          "status": "pass",
+          "detail": "10 unknown"
+        },
+        {
+          "name": "validate：失败用例聚合（9 项 fail + 1 项 unknown）",
+          "status": "pass",
+          "detail": "failed=single_person,full_body_with_feet,face_visible,body_not_occluded,upright_frontal,lighting_ok,single_garment,not_on_model,tag_hidden"
+        },
+        {
+          "name": "submit：缺少 photoUrl / garmentUrl / 非法分辨率均拒绝",
+          "status": "pass",
+          "detail": "3 reject"
+        },
+        {
+          "name": "query：不存在的任务返回 E_TASK_NOT_FOUND(404)，无墓碑",
+          "status": "pass",
+          "detail": "404"
+        },
+        {
+          "name": "生命周期：2048 / 1536 各 3 次 submit→query→success→erase",
+          "status": "pass",
+          "detail": [
+            {
+              "resolution": "2048",
+              "iteration": 1,
+              "wallMs": 61,
+              "resultUrl": "https://mock.invalid/results/mock_mw9eraed_ud7d1r_2048.jpg"
+            },
+            {
+              "resolution": "2048",
+              "iteration": 2,
+              "wallMs": 63,
+              "resultUrl": "https://mock.invalid/results/mock_mw9erag2_p17lfg_2048.jpg"
+            },
+            {
+              "resolution": "2048",
+              "iteration": 3,
+              "wallMs": 62,
+              "resultUrl": "https://mock.invalid/results/mock_mw9eraht_3efk26_2048.jpg"
+            },
+            {
+              "resolution": "1536",
+              "iteration": 1,
+              "wallMs": 47,
+              "resultUrl": "https://mock.invalid/results/mock_mw9erajj_f6oy2g_1536.jpg"
+            },
+            {
+              "resolution": "1536",
+              "iteration": 2,
+              "wallMs": 46,
+              "resultUrl": "https://mock.invalid/results/mock_mw9eraku_u7ucuz_1536.jpg"
+            },
+            {
+              "resolution": "1536",
+              "iteration": 3,
+              "wallMs": 32,
+              "resultUrl": "https://mock.invalid/results/mock_mw9eram4_n4v7g0_1536.jpg"
+            }
+          ]
+        },
+        {
+          "name": "60s 预算：2048/1536 模拟阶段分解均在预算内",
+          "status": "pass",
+          "detail": {
+            "preferred": 15870,
+            "degraded": 10870
+          }
+        },
+        {
+          "name": "物理删除：erase 后 query=404，重复 erase=404，无墓碑",
+          "status": "pass",
+          "detail": "erase→404→404"
+        },
+        {
+          "name": "cancel：取消后状态为 cancelled，仍可物理删除",
+          "status": "pass",
+          "detail": "cancelled"
+        },
+        {
+          "name": "并发：5 个任务并行提交/完成/删除，内存任务表归零",
+          "status": "pass",
+          "detail": "5/5 concurrent ok"
+        }
+      ]
+    },
+    {
+      "name": "cloud-handler（云函数统一响应包裹 / 错误码 / selftest 生命周期）",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "dispatch(health)：返回 mock 适配器能力",
+          "status": "pass",
+          "detail": "vendor=mock"
+        },
+        {
+          "name": "dispatch(未知 action)：E_PARAM 拒绝",
+          "status": "pass",
+          "detail": "unknown action: nope"
+        },
+        {
+          "name": "main(health)：统一响应包裹 {ok,data,error,requestId,serverTime}",
+          "status": "pass",
+          "detail": "req-spike-1"
+        },
+        {
+          "name": "main(参数错误)：error.code=1001 / name=E_PARAM / httpStatus=400",
+          "status": "pass",
+          "detail": "{\"code\":1001,\"name\":\"E_PARAM\",\"message\":\"photoUrl required\",\"hint\":\"\",\"httpStatus\":400}"
+        },
+        {
+          "name": "main(任务不存在)：E_TASK_NOT_FOUND / 404",
+          "status": "pass",
+          "detail": "404"
+        },
+        {
+          "name": "main(selftest)：完整生命周期 + erase 后 404",
+          "status": "pass",
+          "detail": {
+            "elapsedMs": 106,
+            "afterErase": {
+              "code": "E_TASK_NOT_FOUND",
+              "rawCode": 1404,
+              "message": "task not found"
+            }
+          }
+        },
+        {
+          "name": "main(timing)：1536/2048 阶段分解与总时长",
+          "status": "pass",
+          "detail": {
+            "p2048": 15870,
+            "p1536": 10870
+          }
+        },
+        {
+          "name": "main(submit)：合法参数受理并返回 taskId，随后可 erase 清理",
+          "status": "pass",
+          "detail": "mock_mw9erasl_yiaokc"
+        }
+      ]
+    }
+  ]
+}
