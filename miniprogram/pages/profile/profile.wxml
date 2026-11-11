@@ -1,0 +1,36 @@
+<navigation-bar title="我的" back="{{true}}" color="black" background="#f7f7f8"></navigation-bar>
+<view class="page">
+  <view class="page-body">
+    <view class="card quota-card">
+      <view class="quota-head">
+        <view class="card-title">今日额度</view>
+        <text wx:if="{{quota.badgeText}}" class="vip-badge">{{quota.badgeText}}</text>
+      </view>
+      <view class="quota-number">{{quota.quotaText}}</view>
+      <view class="text-secondary">{{quota.vipText}}</view>
+      <view class="text-secondary">{{quota.resetText}}</view>
+      <view wx:if="{{errorText}}" class="form-error">{{errorText}}</view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">同意与数据</view>
+      <view class="row">
+        <text>隐私同意</text>
+        <text class="{{consentView.consented ? 'state-ok' : 'state-warn'}}">{{consentView.consentText}}</text>
+      </view>
+      <view class="text-secondary">{{consentView.consentDetail}}</view>
+      <view class="text-secondary notice">{{noticeText}}</view>
+      <button class="btn btn-secondary" bindtap="onDeleteAll" disabled="{{busy}}" loading="{{busy}}">{{deleteAllText}}</button>
+      <button wx:if="{{consentView.consented}}" class="btn btn-secondary btn-danger" bindtap="onRevokeConsent" disabled="{{busy}}">{{revokeText}}</button>
+      <button wx:else class="btn btn-primary" bindtap="onGoConsent">去完成同意</button>
+    </view>
+
+    <view class="card">
+      <view class="card-title">关于</view>
+      <view class="text-secondary">Sinn 试穿助手：上传本人照片与衣服照片，生成参考试穿效果与参考尺码。</view>
+      <view class="text-secondary">照片与任务数据在 23 小时内自动删除；参考尺码不构成合身承诺。</view>
+    </view>
+
+    <button class="btn btn-ghost" bindtap="onBackHome">返回首页</button>
+  </view>
+</view>

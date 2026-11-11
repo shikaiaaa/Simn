@@ -1,0 +1,74 @@
+<navigation-bar title="人像采集" back="{{true}}" background="#f7f7f8"></navigation-bar>
+
+<scroll-view scroll-y class="page">
+  <view class="page-body">
+    <view class="card">
+      <view class="card-title">人像照片（{{photos.length}}/{{maxPhotos}}）</view>
+      <view class="text-secondary">单人全身、正面直立、脸部与腹部无遮挡；光线均匀，避免逆光。</view>
+
+      <view class="photo-grid">
+        <view class="photo-item" wx:for="{{photos}}" wx:key="path">
+          <image class="photo-thumb" src="{{item.path}}" mode="aspectFill"></image>
+          <view class="photo-status">{{item.status === 'prechecked' ? '已通过' : (item.status === 'precheck_failed' ? '未通过' : (item.status === 'uploaded' ? '已上传' : '待提交'))}}</view>
+          <view class="photo-actions">
+            <text class="link" data-index="{{index}}" bindtap="onPickPhoto">重拍</text>
+            <text class="link link-danger" data-index="{{index}}" bindtap="onRemovePhoto">删除</text>
+          </view>
+        </view>
+        <view class="photo-add" wx:if="{{photos.length < maxPhotos}}" data-index="-1" bindtap="onPickPhoto">
+          <text class="photo-add-plus">+</text>
+          <text>添加人像</text>
+        </view>
+      </view>
+      <view class="hint" wx:if="{{errorText}}">{{errorText}}</view>
+      <view class="hint hint-ok" wx:if="{{precheckNote}}">{{precheckNote}}</view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">身材信息</view>
+      <view class="field">
+        <text class="field-label">身高（cm）*</text>
+        <input class="field-input" type="number" value="{{heightCm}}" data-field="heightCm" bindinput="onInputField" placeholder="100–250 的整数" />
+      </view>
+      <view class="field">
+        <text class="field-label">体重（kg）*</text>
+        <input class="field-input" type="digit" value="{{weightKg}}" data-field="weightKg" bindinput="onInputField" placeholder="25–250，最多 1 位小数" />
+      </view>
+      <view class="field">
+        <text class="field-label">胸围（cm，选填）</text>
+        <input class="field-input" type="digit" value="{{chestCm}}" data-field="chestCm" bindinput="onInputField" placeholder="40–200" />
+      </view>
+      <view class="field">
+        <text class="field-label">腰围（cm，选填）</text>
+        <input class="field-input" type="digit" value="{{waistCm}}" data-field="waistCm" bindinput="onInputField" placeholder="40–200" />
+      </view>
+      <view class="field">
+        <text class="field-label">臀围（cm，选填）</text>
+        <input class="field-input" type="digit" value="{{hipCm}}" data-field="hipCm" bindinput="onInputField" placeholder="40–200" />
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">性别（选填）</view>
+      <view class="chip-row">
+        <view
+          wx:for="{{genderOptions}}"
+          wx:key="value"
+          class="chip {{gender === item.value ? 'chip-active' : ''}}"
+          data-value="{{item.value}}"
+          bindtap="onSelectGender"
+        >{{item.label}}</view>
+      </view>
+      <view class="text-secondary">性别不填不影响生成与参考尺码。</view>
+    </view>
+
+    <view class="form-errors" wx:if="{{formErrors.length}}">
+      <view wx:for="{{formErrors}}" wx:key="message" class="form-error">{{item.message}}</view>
+    </view>
+
+    <button class="btn btn-primary" disabled="{{!canSubmit || submitting}}" bindtap="onNext">
+      {{submitting ? '处理中…' : '下一步'}}
+    </button>
+    <view class="disclaimer">照片仅用于本次试穿生成，任务数据 23 小时内自动删除。</view>
+  </view>
+</scroll-view>

@@ -1,0 +1,37 @@
+<view
+  id="zoom-stage"
+  class="zoom-stage"
+  bind:tap="onTap"
+  bind:touchstart="onTouchStart"
+  bind:touchmove="onTouchMove"
+  bind:touchend="onTouchEnd"
+  bind:touchcancel="onTouchEnd"
+>
+  <block wx:if="{{mode === 'worklet'}}">
+    <scale-gesture-handler class="zoom-gesture" tag="sinn-zoom-scale" worklet:ongesture="onScaleGesture">
+      <pan-gesture-handler class="zoom-gesture" tag="sinn-zoom-pan" worklet:ongesture="onPanGesture">
+        <image
+          id="zoom-image"
+          class="zoom-image"
+          src="{{src}}"
+          mode="aspectFit"
+          bindload="onImageLoad"
+          binderror="onImageError"
+          show-menu-by-longpress="{{false}}"
+        ></image>
+      </pan-gesture-handler>
+    </scale-gesture-handler>
+  </block>
+  <image
+    wx:else
+    id="zoom-image"
+    class="zoom-image"
+    src="{{src}}"
+    mode="aspectFit"
+    style="transform: {{transform}}"
+    bindload="onImageLoad"
+    binderror="onImageError"
+    show-menu-by-longpress="{{false}}"
+  ></image>
+  <view wx:if="{{error}}" class="zoom-error">{{error}}</view>
+</view>

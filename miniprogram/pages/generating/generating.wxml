@@ -1,0 +1,21 @@
+<navigation-bar title="生成中" back="{{true}}" color="black" background="#f7f7f8"></navigation-bar>
+<view class="page">
+  <view class="page-body">
+    <view class="card generating-card" wx:if="{{!terminal}}">
+      <view class="generating-stage">{{stageText}}</view>
+      <view class="generating-waited">{{waitedText}}</view>
+      <view class="text-secondary generating-tip">正在生成你的试穿效果，请保持页面打开。</view>
+      <view class="generating-net" wx:if="{{netNotice}}">{{netNotice}}</view>
+      <button class="btn btn-ghost generating-cancel" bindtap="onCancel">取消生成</button>
+    </view>
+
+    <view class="card generating-card" wx:if="{{terminal}}">
+      <view class="generating-error-title">{{errorTitle}}</view>
+      <view class="generating-error-message">{{errorMessage}}</view>
+      <button class="btn btn-primary" wx:if="{{canRetry}}" bindtap="onRetry">重试</button>
+      <button class="btn btn-secondary" bindtap="onBackHome">返回首页</button>
+    </view>
+
+    <view class="text-secondary generating-note">本次未出图前不会展示任何结果图片。</view>
+  </view>
+</view>

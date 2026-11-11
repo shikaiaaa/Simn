@@ -1,0 +1,53 @@
+<navigation-bar title="试穿结果" back="{{true}}" color="black" background="#f7f7f8"></navigation-bar>
+<view class="page">
+  <view class="page-body">
+    <view wx:if="{{loading}}" class="placeholder">正在加载结果…</view>
+
+    <view wx:elif="{{errorText}}" class="result-error">
+      <view class="result-error-text">{{errorText}}</view>
+      <button class="btn btn-primary" bindtap="onBackHome">返回首页</button>
+    </view>
+
+    <block wx:else>
+      <view class="result-stage">
+        <zoom-view
+          id="zoom-view"
+          class="result-zoom"
+          src="{{imageUrl}}"
+          image-width="{{result.width}}"
+          image-height="{{result.height}}"
+        ></zoom-view>
+        <view class="result-ai-badge">{{aiLabel}}</view>
+      </view>
+
+      <view class="result-zoom-bar">
+        <text class="text-secondary">双指缩放 1x–3x · 单指拖动 · 双击复位</text>
+        <button class="btn btn-ghost result-reset" size="mini" bindtap="onResetZoom">复位</button>
+      </view>
+
+      <view wx:if="{{degradedNotice}}" class="card result-degraded">{{degradedNotice}}</view>
+
+      <view class="card">
+        <view class="card-title">参考尺码</view>
+        <block wx:if="{{sizeView.available}}">
+          <view class="result-size-range">{{sizeView.rangeText}}</view>
+          <view class="text-secondary result-size-line">{{sizeView.standardText}}</view>
+          <view class="text-secondary result-size-line">{{sizeView.basisText}}</view>
+          <view class="text-secondary result-size-line">{{sizeView.disclaimer}}</view>
+        </block>
+        <block wx:else>
+          <view class="result-size-insufficient">{{sizeView.insufficientText}}</view>
+          <view class="text-secondary result-size-line">{{sizeView.disclaimer}}</view>
+        </block>
+      </view>
+
+      <view class="result-actions">
+        <button class="btn btn-secondary" bindtap="onBackHome">返回首页</button>
+        <button class="btn btn-danger" bindtap="onDeleteTap" disabled="{{deleting}}">
+          {{deleting ? '删除中…' : '删除本次结果'}}
+        </button>
+      </view>
+      <view class="result-footnote">删除本次结果会物理删除照片与结果，无法恢复；本次不返还额度。</view>
+    </block>
+  </view>
+</view>

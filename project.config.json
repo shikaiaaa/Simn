@@ -1,10 +1,11 @@
 {
-  "appid": "wxbbdcd1c49ad1259a",
+  "appid": "wx735e60c2c07673aa",
   "projectname": "Sinn",
   "compileType": "miniprogram",
   "miniprogramRoot": "miniprogram/",
   "srcMiniprogramRoot": "miniprogram/",
-  "libVersion": "trial",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "libVersion": "3.18.0",
   "isGameTourist": false,
   "packOptions": {
     "ignore": [],
@@ -29,7 +30,7 @@
     "minifyWXSS": true,
     "localPlugins": false,
     "condition": false,
-    "compileWorklet": false,
+    "compileWorklet": true,
     "disableUseStrict": false,
     "minifyWXML": true,
     "useCompilerPlugins": false

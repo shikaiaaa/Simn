@@ -1,0 +1,13 @@
+{
+  "name": "sinn-task",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sinn 试穿任务云函数（assetRegister/precheck/createTask/taskGet/cancelTask/deleteTask/auditTask）",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

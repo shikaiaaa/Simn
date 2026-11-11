@@ -1,0 +1,13 @@
+{
+  "name": "sinn-cleanup",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sinn 到期数据物理清理定时云函数（SPEC-0001 §4 / API-13）",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

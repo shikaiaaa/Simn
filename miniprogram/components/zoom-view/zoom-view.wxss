@@ -1,0 +1,41 @@
+/* zoom-view.wxss —— 单图源缩放容器（S2+/S2）。
+   图片始终居中，等比缩放；不使用背景图/切图，避免接缝与白屏。 */
+.zoom-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #101216;
+}
+
+.zoom-gesture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.zoom-image {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  will-change: transform;
+  background: #101216;
+}
+
+.zoom-error {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24rpx;
+  margin: 0 auto;
+  width: 480rpx;
+  padding: 16rpx 24rpx;
+  border-radius: 12rpx;
+  background: rgba(16, 18, 22, 0.72);
+  color: #ffffff;
+  font-size: 24rpx;
+  text-align: center;
+}

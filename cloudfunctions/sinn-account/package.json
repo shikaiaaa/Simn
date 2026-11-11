@@ -1,0 +1,13 @@
+{
+  "name": "sinn-account",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sinn 账户/同意/删除全部云函数（SPEC-0001 §B.2 API-1..4）",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

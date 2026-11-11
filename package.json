@@ -1,0 +1,16 @@
+{
+  "name": "sinn",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sinn 微信小程序（内部 demo）：2D 虚拟试穿。业务源码在 miniprogram/，云函数在 cloudfunctions/，根配置由 Lead 维护。",
+  "scripts": {
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:e2e": "node tests/e2e/run-e2e.js"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "miniprogram-automator": "^0.12.1",
+    "miniprogram-simulate": "^1.6.1"
+  }
+}

@@ -1,0 +1,64 @@
+/* profile.wxss —— 我的页（DEV-0001-09）。全局 .page/.card/.btn 等样式来自 app.wxss。 */
+
+.quota-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f2f4f7 100%);
+}
+
+.quota-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vip-badge {
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  background: #1f2329;
+  color: #f6d365;
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+}
+
+.quota-number {
+  margin: 20rpx 0 8rpx;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #1f2329;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16rpx;
+}
+
+.state-ok {
+  color: #2f9e5f;
+  font-size: 26rpx;
+}
+
+.state-warn {
+  color: #c47f17;
+  font-size: 26rpx;
+}
+
+.notice {
+  margin: 20rpx 0;
+}
+
+.form-error {
+  margin-top: 12rpx;
+  color: #d93026;
+  font-size: 26rpx;
+}
+
+.btn-danger {
+  color: #d93026;
+  border-color: #f0c4c0;
+}
+
+.btn + .btn {
+  margin-top: 24rpx;
+}

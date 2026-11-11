@@ -1,0 +1,91 @@
+/* garment.wxss —— 衣服采集页（DEV-0001-06）。 */
+
+.page {
+  height: 100vh;
+}
+
+.garment-slot {
+  margin-top: 24rpx;
+}
+
+.garment-item {
+  position: relative;
+  width: 100%;
+  height: 480rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: #eef1f5;
+}
+
+.garment-thumb {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.garment-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 64rpx;
+  padding: 6rpx 16rpx;
+  font-size: 24rpx;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.garment-actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-around;
+  padding: 12rpx 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.garment-actions .link {
+  font-size: 26rpx;
+  color: #fff;
+}
+
+.link-danger {
+  color: #ffb3b3 !important;
+}
+
+.garment-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 480rpx;
+  border: 2rpx dashed #c3c9d2;
+  border-radius: 16rpx;
+  color: #8a9099;
+  font-size: 28rpx;
+  background: #fbfcfe;
+}
+
+.garment-add-plus {
+  font-size: 72rpx;
+  line-height: 1;
+  color: #b6bdc7;
+  margin-bottom: 8rpx;
+}
+
+.hint {
+  margin-top: 12rpx;
+  color: #c0392b;
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+
+.disclaimer {
+  margin-top: 24rpx;
+  text-align: center;
+  color: #a3a9b3;
+  font-size: 22rpx;
+  line-height: 1.5;
+}

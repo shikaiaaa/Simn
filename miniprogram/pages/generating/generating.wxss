@@ -1,0 +1,41 @@
+/* generating.wxss —— 生成中页（DEV-0001-07）。 */
+.generating-card {
+  padding: 48rpx 32rpx;
+  text-align: center;
+}
+.generating-stage {
+  font-size: 40rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+.generating-waited {
+  font-size: 30rpx;
+  color: #5a626d;
+  margin-bottom: 24rpx;
+}
+.generating-tip {
+  margin-bottom: 24rpx;
+}
+.generating-net {
+  font-size: 26rpx;
+  color: #b26a00;
+  margin-bottom: 24rpx;
+}
+.generating-cancel {
+  margin-top: 16rpx;
+}
+.generating-error-title {
+  font-size: 38rpx;
+  font-weight: 600;
+  margin-bottom: 20rpx;
+}
+.generating-error-message {
+  font-size: 30rpx;
+  color: #5a626d;
+  line-height: 1.6;
+  margin-bottom: 32rpx;
+}
+.generating-note {
+  text-align: center;
+  margin-top: 24rpx;
+}

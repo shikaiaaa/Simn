@@ -1,10 +1,76 @@
 /**app.wxss**/
-.container {
-  height: 100%;
+/* 全局基础样式：浅色单主题（P1 不启用深色模式，SPEC §E），内容区 iPad 最大 750rpx 居中。 */
+page {
+  background: #f7f7f8;
+  color: #1f2329;
+  font-size: 30rpx;
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 0 32rpx 48rpx;
+}
+
+.page-body {
+  box-sizing: border-box;
+  max-width: 750rpx;
+  margin: 0 auto;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+}
+
+.card-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.text-secondary {
+  color: #8a9099;
+  font-size: 26rpx;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96rpx;
+  border-radius: 48rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-top: 24rpx;
+}
+
+.btn-primary {
+  background: #1f2329;
+  color: #ffffff;
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: #1f2329;
+  border: 2rpx solid #d9dde3;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: #5a626d;
+  font-weight: 400;
+}
+
+.placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 200rpx 0;
-  box-sizing: border-box;
-} 
+  justify-content: center;
+  min-height: 60vh;
+  color: #8a9099;
+}

@@ -1,0 +1,33 @@
+<navigation-bar title="衣服采集" back="{{true}}" background="#f7f7f8"></navigation-bar>
+
+<scroll-view scroll-y class="page">
+  <view class="page-body">
+    <view class="card">
+      <view class="card-title">衣服照片（单件上装）</view>
+      <view class="text-secondary">{{acceptHint}}</view>
+      <view class="text-secondary">请平铺或挂拍自家衣服，单件完整展示；不要吊牌、不要多件、不要模特上身、不要电商商品图。</view>
+
+      <view class="garment-slot">
+        <view class="garment-item" wx:if="{{photo}}">
+          <image class="garment-thumb" src="{{photo.path}}" mode="aspectFill"></image>
+          <view class="garment-status">{{photo.status === 'prechecked' ? '已通过预检' : (photo.status === 'uploaded' ? '已上传' : '待提交')}}</view>
+          <view class="garment-actions">
+            <text class="link" bindtap="onPickPhoto">重拍</text>
+            <text class="link link-danger" bindtap="onRemovePhoto">删除</text>
+          </view>
+        </view>
+        <view class="garment-add" wx:else bindtap="onPickPhoto">
+          <text class="garment-add-plus">+</text>
+          <text>添加衣服照片</text>
+        </view>
+      </view>
+
+      <view class="hint" wx:if="{{errorText}}">{{errorText}}</view>
+    </view>
+
+    <button class="btn btn-primary" disabled="{{!canSubmit || submitting}}" bindtap="onStart">
+      {{submitting ? '处理中…' : '开始生成'}}
+    </button>
+    <view class="disclaimer">生成前会先做照片预检；预检不通过不会创建任务、不扣额度。</view>
+  </view>
+</scroll-view>

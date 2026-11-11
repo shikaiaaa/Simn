@@ -1,0 +1,46 @@
+<!--consent.wxml：18+ 声明 + 8 项隐私披露 + 单独同意（DEV-0001-05）-->
+<navigation-bar title="18+ 与隐私同意" back="{{true}}" color="black" background="#f7f7f8"></navigation-bar>
+<scroll-view class="page" scroll-y type="list">
+  <view class="page-body">
+    <view class="card">
+      <block wx:if="{{step === 1}}">
+        <view class="card-title">开始前，请确认</view>
+        <view class="tip">本功能仅面向成年人，且仅用于生成你的 2D 试穿效果图。</view>
+
+        <view class="check-row" bindtap="onToggleAge">
+          <view class="checkbox {{ageConfirmed ? 'checked' : ''}}">{{ageConfirmed ? '✓' : ''}}</view>
+          <view class="check-text">{{ageText}}</view>
+        </view>
+        <view class="check-row" bindtap="onToggleTerms">
+          <view class="checkbox {{termsAccepted ? 'checked' : ''}}">{{termsAccepted ? '✓' : ''}}</view>
+          <view class="check-text">{{termsText}}</view>
+        </view>
+
+        <button class="btn btn-primary" disabled="{{!ageConfirmed || !termsAccepted}}" bindtap="onStep1Next">下一步</button>
+        <button class="btn btn-ghost" bindtap="onReject">不同意，返回</button>
+      </block>
+
+      <block wx:if="{{step === 2}}">
+        <view class="card-title">个人信息处理说明（8 项）</view>
+        <view class="disclosure-item" wx:for="{{disclosures}}" wx:key="key">
+          <view class="disclosure-label">{{item.label}}</view>
+          <view class="disclosure-text">{{item.text}}</view>
+        </view>
+        <view class="gender-note">{{genderNote}}</view>
+
+        <view class="check-row" bindtap="onTogglePrivacy">
+          <view class="checkbox {{privacyAgreed ? 'checked' : ''}}">{{privacyAgreed ? '✓' : ''}}</view>
+          <view class="check-text">{{privacyText}}</view>
+        </view>
+
+        <button class="btn btn-primary" disabled="{{!privacyAgreed || submitting}}" bindtap="onAgree">{{submitting ? '正在提交…' : '同意并继续'}}</button>
+        <button class="btn btn-secondary" bindtap="onStep2Back">上一步</button>
+      </block>
+
+      <view wx:if="{{errorText}}" class="error-text">{{errorText}}</view>
+      <view wx:if="{{privacyPrompt}}" class="tip">微信隐私授权请求已收到，请在此页完成同意。</view>
+    </view>
+
+    <view class="footer-tip text-secondary">{{draftNotice}}</view>
+  </view>
+</scroll-view>

@@ -1,28 +1,24 @@
 <!--index.wxml-->
-<navigation-bar title="Weixin" back="{{false}}" color="black" background="#FFF"></navigation-bar>
-<scroll-view class="scrollarea" scroll-y type="list">
-  <view class="container">
-    <view class="userinfo">
-      <block wx:if="{{canIUseNicknameComp && !hasUserInfo}}">
-        <button class="avatar-wrapper" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
-          <image class="avatar" src="{{userInfo.avatarUrl}}"></image>
-        </button>
-        <view class="nickname-wrapper">
-          <text class="nickname-label">昵称</text>
-          <input type="nickname" class="nickname-input" placeholder="请输入昵称" bind:change="onInputChange" />
-        </view>
-      </block>
-      <block wx:elif="{{!hasUserInfo}}">
-        <button wx:if="{{canIUseGetUserProfile}}" bindtap="getUserProfile"> 获取头像昵称 </button>
-        <view wx:else> 请使用2.10.4及以上版本基础库 </view>
-      </block>
-      <block wx:else>
-        <image bindtap="bindViewTap" class="userinfo-avatar" src="{{userInfo.avatarUrl}}" mode="cover"></image>
-        <text class="userinfo-nickname">{{userInfo.nickName}}</text>
-      </block>
+<navigation-bar title="Sinn" back="{{false}}" color="black" background="#f7f7f8"></navigation-bar>
+<scroll-view class="page" scroll-y type="list">
+  <view class="page-body">
+    <view class="hero">
+      <view class="hero-title">2D 虚拟试穿</view>
+      <view class="hero-desc">上传一张全身照和一件上装照片，生成你的试穿效果图。</view>
     </view>
-    <view class="usermotto">
-      <text class="user-motto">{{motto}}</text>
+
+    <view class="card">
+      <view class="card-title">拍摄准备</view>
+      <view class="tip">全身直立，面部与脚部完整入镜，光线均匀</view>
+      <view class="tip">单件上装，平铺或挂拍，不要拍吊牌与模特上身</view>
+      <view class="tip">效果由 AI 生成，仅供参考；照片与结果最长保存 24 小时，可随时删除</view>
     </view>
+
+    <button class="btn btn-primary" bindtap="onStart">开始试穿</button>
+    <button wx:if="{{hasActiveTask}}" class="btn btn-secondary" bindtap="onResume">继续上次生成</button>
+    <button class="btn btn-ghost" bindtap="onProfile">我的</button>
+
+    <view wx:if="{{loading}}" class="text-secondary footer-tip">正在同步状态…</view>
+    <view class="text-secondary footer-tip">内部演示版本</view>
   </view>
 </scroll-view>
