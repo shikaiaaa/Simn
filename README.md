@@ -8,12 +8,13 @@ P1「2D 虚拟试穿」内部 demo 已完整走完一轮四角色流水线
 当前状态（2026-11-11）：
 
 ```
-check-gates.ps1   → 10 个文档, 1 个任务清单, FAIL=0, WARN=0
+check-gates.ps1   → 11 个文档, 1 个任务清单, FAIL=0, WARN=0
 check-wxapp.ps1   → appid: wx735e60c2c07673aa
                     7 个页面, 0 个分包, 主包 174.6KB / 合计 174.6KB, FAIL=0, WARN=0
 jest              → 27 suites / 359 tests 全绿（调试入口移除后）
 integration-check → 10/10 PASS（mock 全链路）
-e2e（真实云）      → 12 条 L3：4 通过 / 0 失败 / 8 阻塞
+e2e（真实云）      → 12 条 L3：5 通过 / 0 失败 / 7 阻塞
+AC-1..AC-26       → 通过 13 / 部分 2 / 阻塞 11 / 不通过 0（REPORT-0001 v0.3）
 ```
 
 QA 结论为 **「不通过（demo 阶段阻塞）」**：本阶段可执行证据全部通过，剩余缺口是外部条件
@@ -42,7 +43,8 @@ Sinn/
 │  ├─ sa/ se/ dev/ qa/    各角色产物（REQ / SPEC+TASKS / DEV 交接 / TC+E2E-LOG+REPORT）
 │  └─ se/SPEC-MINIAPP-ADDENDUM.md、qa/TEST-STRATEGY.md、qa/RELEASE-CHECKLIST.md
 ├─ playbooks/             lead / sa / se / dev / qa 作业规程
-├─ tests/                 unit/（jest）、e2e/（miniprogram-automator）、mocks/wx.js、fixtures/
+├─ tests/                 unit/（jest）、e2e/（miniprogram-automator）、mocks/wx.js、
+│                         fixtures/mat/（测试素材：MANIFEST + 生成脚本，图片二进制不入库）
 └─ tools/
    ├─ check-gates.ps1     文档门禁 + 任务 DAG
    └─ check-wxapp.ps1     页面注册 / 包体积 / 动态代码 / 隐私登记
@@ -144,11 +146,19 @@ node tests/e2e/run-e2e.js
 - ✅ **本地联调临时物已清理**：`.tmp-*`（假 HOME、CLI 登录凭据、探针脚本、截图）均已删除并
   被 `.gitignore` 排除；仓库中无临时物、无真实密钥。
 - ✅ **代码已托管**：`git@github.com:shikaiaaa/Simn.git` 的 `main` 分支（本地提交 + 合并远端
-  Initial commit，`git status` 干净）。
-- ⏳ **外部解锁项（不属于代码问题）**：轮换已泄露的火山 AK/SK（SEC-01）、开通「图片换装 V2」
-  并实测（CP-04）、真机与人工视觉（CP-11/CP-12）、正式隐私文本（CP-10）、素材（E-7）。
-  e2e 复跑前提：等次日 00:00 额度自然重置，或在云开发控制台人工重置**仅测试环境**的
-  `sinn_users.quota.usedToday`（见 `docs/qa/E2E-LOG-0001.md` v0.4 §6.3）。
+  Initial commit；含 P1 demo 全量、调试入口移除与最终 QA 收尾，`git status` 干净）。
+  一次性推送用的 SSH 密钥已删除、`core.sshCommand` 已复位；后续推送请用自己的 GitHub 凭据
+  （SSH key / PAT），本机已配置 `http.sslBackend=openssl`（否则 schannel 报 `SEC_E_NO_CREDENTIALS`）。
+- ✅ **测试素材已固化**（2026-11-11，task-46/48）：MAT-01..09（4 张 Pexels 全身人像 + 衣服平铺 + 4 张派生负例）
+  与来源/许可/合成体型数据见 `docs/qa/MATERIALS-0001.md` 与 `tests/fixtures/mat/MATERIALS-MANIFEST.json`；
+  **图片二进制按 Pexels License 不入库**（`.gitignore` 已排除），克隆后需按 MANIFEST 重新获取。
+  MAT-10..15 仍缺（相关用例按阻塞记录）。
+- ✅ **AK/SK 安全项已关闭**：此前对话泄露的火山 AK/SK 已由用户轮换；新密钥只进云函数环境变量，
+  未入库、未进日志（SEC-01 已关闭）。
+- ⏳ **外部解锁项（不属于代码问题）**：开通「图片换装 V2」并实测（CP-04b/c/d）、真机与人工视觉
+  （CP-11/CP-12）、正式隐私文本（CP-10）、VIP 白名单（CP-09）、素材 MAT-10..15（E-7 部分解除）。
+  e2e 复跑前提：当日额度已用尽时，等次日 00:00 自然重置，或在云开发控制台人工重置**仅测试环境**的
+  `sinn_users.quota.usedToday`（受保护调试夹具已移除，见 `docs/qa/E2E-LOG-0001.md` v0.7 §6.4）。
 
 ## 10. 参考实现
 

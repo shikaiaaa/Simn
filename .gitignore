@@ -10,6 +10,12 @@ project.private.config.json
 coverage/
 tests/e2e/results/
 
+# 测试素材图片（Pexels License 免费使用但不含再分发授权；只保留来源说明与生成脚本，图片不入库）
+tests/fixtures/mat/*.jpg
+tests/fixtures/mat/*.jpeg
+tests/fixtures/mat/*.png
+tests/fixtures/mat/*.webp
+
 # 记忆插件运行时产物（本地）
 .memsearch/
 
