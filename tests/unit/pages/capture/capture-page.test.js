@@ -49,6 +49,9 @@ var appMock = null
 
 beforeEach(function () {
   wx.__reset()
+  delete wx.createOffscreenCanvas
+  delete wx.canvasToTempFilePath
+  delete wx.getFileInfo
   wx.getStorageSync = jest.fn(function (key) {
     return key === 'sinn_consent_v1' ? CONSENT : ''
   })
@@ -127,7 +130,7 @@ describe('capture 页：照片增删改与 L0', function () {
     })
   })
 
-  test('L0 拦截超过 10MB 的照片，不进入列表、不上传', function () {
+  test('超过 10MB 走自动压缩；无 Canvas 能力时提示处理失败且不上传', function () {
     wx.chooseMedia = jest.fn(function (options) {
       options.success({ tempFiles: [{ tempFilePath: '/tmp/big.jpg', size: 12 * 1024 * 1024, fileType: 'image/jpeg' }] })
     })
@@ -135,12 +138,13 @@ describe('capture 页：照片增删改与 L0', function () {
     page.onLoad()
     return page.onPickPhoto(pickEvent(-1)).then(function () {
       expect(page.data.photos.length).toBe(0)
-      expect(page.data.errorText).toContain('10MB')
+      expect(page.data.errorText).toContain('照片处理失败')
       expect(wx.cloud.uploadFile).not.toHaveBeenCalled()
+      expect(wx.setStorageSync).not.toHaveBeenCalled()
     })
   })
 
-  test('L0 拦截非 JPG/PNG 格式', function () {
+  test('非 JPG/PNG 自动尝试转 JPEG；无 Canvas 能力时提示处理失败', function () {
     wx.chooseMedia = jest.fn(function (options) {
       options.success({ tempFiles: [{ tempFilePath: '/tmp/a.webp', size: 1024 * 1024, fileType: 'image/webp' }] })
     })
@@ -148,7 +152,21 @@ describe('capture 页：照片增删改与 L0', function () {
     page.onLoad()
     return page.onPickPhoto(pickEvent(-1)).then(function () {
       expect(page.data.photos.length).toBe(0)
-      expect(page.data.errorText).toContain('JPG / PNG')
+      expect(page.data.errorText).toContain('照片处理失败')
+    })
+  })
+
+  test('长边 <1024 直接拒绝重拍，不压缩、不上传（AC-27 ③）', function () {
+    wx.getImageInfo = jest.fn(function (options) {
+      options.success({ width: 800, height: 900, orientation: 'up', type: 'jpeg' })
+    })
+    var page = createPage()
+    page.onLoad()
+    return page.onPickPhoto(pickEvent(-1)).then(function () {
+      expect(page.data.photos.length).toBe(0)
+      expect(page.data.errorText).toContain('分辨率过低，请重拍')
+      expect(wx.createOffscreenCanvas).toBeUndefined()
+      expect(wx.cloud.uploadFile).not.toHaveBeenCalled()
     })
   })
 
@@ -306,6 +324,161 @@ describe('capture 页：上传 + 服务端预检 + 跳转', function () {
       expect(wx.cloud.uploadFile).not.toHaveBeenCalled()
       expect(wx.navigateTo).not.toHaveBeenCalled()
       expect(page.data.errorText.length).toBeGreaterThan(0)
+    })
+  })
+})
+
+describe('capture 页：自动压缩（AC-27 ①④⑤⑥⑦）', function () {
+  function mockCanvasPipeline(options) {
+    options = options || {}
+    var deferred = []
+    var canvas = {
+      getContext: jest.fn(function () {
+        return {
+          save: jest.fn(),
+          translate: jest.fn(),
+          scale: jest.fn(),
+          rotate: jest.fn(),
+          drawImage: jest.fn(),
+          restore: jest.fn()
+        }
+      }),
+      createImage: jest.fn(function () {
+        var image = {}
+        Object.defineProperty(image, 'src', {
+          set: function () {
+            if (options.defer) {
+              deferred.push(function () {
+                if (image.onload) image.onload()
+              })
+            } else if (image.onload) {
+              image.onload()
+            }
+          }
+        })
+        return image
+      })
+    }
+    wx.createOffscreenCanvas = jest.fn(function () {
+      return canvas
+    })
+    wx.canvasToTempFilePath = jest.fn(function (opts) {
+      opts.success({ tempFilePath: options.output || '/tmp/compressed.jpg' })
+    })
+    wx.getFileInfo = jest.fn(function (opts) {
+      if (options.sizeError) return opts.fail({ errMsg: 'getFileInfo:fail' })
+      var next = options.sizes && options.sizes.length ? options.sizes.shift() : 4 * 1024 * 1024
+      opts.success({ size: next })
+    })
+    return {
+      canvas: canvas,
+      flush: function () {
+        while (deferred.length) deferred.shift()()
+      }
+    }
+  }
+
+  function bigImage() {
+    wx.getImageInfo = jest.fn(function (options) {
+      options.success({ width: 6000, height: 4000, orientation: 'up', type: 'jpeg' })
+    })
+    wx.chooseMedia = jest.fn(function (options) {
+      options.success({ tempFiles: [{ tempFilePath: '/tmp/big.jpg', size: 12 * 1024 * 1024, fileType: 'image/jpeg' }] })
+    })
+  }
+
+  test('大图压缩后以 JPEG 入列表、提示已自动压缩、上传使用压缩路径（AC-29 ①）', function () {
+    bigImage()
+    mockCanvasPipeline({ sizes: [8 * 1024 * 1024] })
+    var page = createPage()
+    page.onLoad()
+    return page.onPickPhoto(pickEvent(-1)).then(function () {
+      expect(page.data.photos.length).toBe(1)
+      expect(page.data.photos[0].path).toBe('/tmp/compressed.jpg')
+      expect(page.data.photos[0].compressed).toBe(true)
+      expect(page.data.compressionNote).toContain('已自动压缩照片')
+      expect(page.data.compressionNote).toContain('6000→4096')
+      expect(typeof page._lastCompressMs).toBe('number')
+      fillValidForm(page)
+      return page.onNext().then(function () {
+        expect(wx.cloud.uploadFile).toHaveBeenCalledTimes(1)
+        expect(wx.cloud.uploadFile.mock.calls[0][0].filePath).toBe('/tmp/compressed.jpg')
+        var assetCalls = wx.cloud.callFunction.mock.calls.filter(function (c) {
+          return c[0].data.action === 'assetRegister'
+        })
+        expect(assetCalls.length).toBe(1)
+        expect(assetCalls[0][0].data.bytes).toBe(4 * 1024 * 1024)
+        expect(Math.max(assetCalls[0][0].data.width, assetCalls[0][0].data.height)).toBe(4096)
+      })
+    })
+  })
+
+  test('仅超供应商规格（6MB/4000px）：提示「已自动优化照片（供应商限制）」（AC-29 ①）', function () {
+    wx.getImageInfo = jest.fn(function (options) {
+      options.success({ width: 4000, height: 3000, orientation: 'up', type: 'jpeg' })
+    })
+    wx.chooseMedia = jest.fn(function (options) {
+      options.success({ tempFiles: [{ tempFilePath: '/tmp/vendor.jpg', size: 6 * 1024 * 1024, fileType: 'image/jpeg' }] })
+    })
+    mockCanvasPipeline({ sizes: [6 * 1024 * 1024, 4 * 1024 * 1024] })
+    var page = createPage()
+    page.onLoad()
+    return page.onPickPhoto(pickEvent(-1)).then(function () {
+      expect(page.data.photos.length).toBe(1)
+      expect(page.data.photos[0].compressed).toBe(true)
+      expect(page.data.compressionNote).toBe('已自动优化照片（供应商限制）')
+      expect(page.data.photos[0].originalBytes).toBe(6 * 1024 * 1024)
+    })
+  })
+
+  test('压缩过程中 processing=true、按钮禁用，结束后恢复（AC-27 ⑦）', function () {
+    bigImage()
+    var pipeline = mockCanvasPipeline({ defer: true, sizes: [8 * 1024 * 1024] })
+    var page = createPage()
+    page.onLoad()
+    var pending = page.onPickPhoto(pickEvent(-1))
+    return new Promise(function (resolve) {
+      setImmediate(resolve)
+    })
+      .then(function () {
+        expect(page.data.processing).toBe(true)
+        expect(page.data.canSubmit).toBe(false)
+        pipeline.flush()
+        // 新供应商规格压缩可能连续渲染多档，需等待微任务链并再次 flush。
+        return new Promise(function (resolve) {
+          setImmediate(resolve)
+        })
+      })
+      .then(function () {
+        pipeline.flush()
+        return pending
+      })
+      .then(function () {
+        expect(page.data.processing).toBe(false)
+        expect(page.data.photos.length).toBe(1)
+      })
+  })
+
+  test('小图不压缩、无提示（AC-27 ⑤）', function () {
+    var page = createPage()
+    page.onLoad()
+    return page.onPickPhoto(pickEvent(-1)).then(function () {
+      expect(page.data.photos.length).toBe(1)
+      expect(page.data.photos[0].compressed).toBeFalsy()
+      expect(page.data.compressionNote).toBe('')
+    })
+  })
+
+  test('压缩失败：提示处理失败、不进入列表、不上传（AC-27 ⑥ / 5007）', function () {
+    bigImage()
+    mockCanvasPipeline({ sizeError: true })
+    var page = createPage()
+    page.onLoad()
+    return page.onPickPhoto(pickEvent(-1)).then(function () {
+      expect(page.data.photos.length).toBe(0)
+      expect(page.data.errorText).toContain('照片处理失败')
+      expect(wx.cloud.uploadFile).not.toHaveBeenCalled()
+      expect(page.data.processing).toBe(false)
     })
   })
 })

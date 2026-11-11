@@ -167,4 +167,57 @@ describe('services/upload.js', function () {
       expect(wx.cloud.uploadFile).not.toHaveBeenCalled()
     })
   })
+
+  test('上传前二次断言：>5MB -> 5007 且不调用 uploadFile（AC-29 ③）', function () {
+    return upload
+      .uploadPersonPhoto({
+        wxRef: wx,
+        clientReqId: CLIENT_REQ_ID,
+        filePath: '/tmp/person.jpg',
+        mime: 'image/jpeg',
+        bytes: 6 * 1024 * 1024,
+        width: 1080,
+        height: 1920,
+        now: NOW
+      })
+      .then(function (result) {
+        expect(result.ok).toBe(false)
+        expect(result.code).toBe(5007)
+        expect(wx.cloud.uploadFile).not.toHaveBeenCalled()
+        expect(wx.cloud.callFunction).not.toHaveBeenCalled()
+      })
+  })
+
+  test('上传前二次断言：长边 >4096 或非 JPG -> 5007 且不上传（AC-29 ③）', function () {
+    return upload
+      .uploadPersonPhoto({
+        wxRef: wx,
+        clientReqId: CLIENT_REQ_ID,
+        filePath: '/tmp/person.jpg',
+        mime: 'image/jpeg',
+        bytes: 1024,
+        width: 5000,
+        height: 3000,
+        now: NOW
+      })
+      .then(function (wide) {
+        expect(wide.ok).toBe(false)
+        expect(wide.code).toBe(5007)
+        return upload.uploadGarmentPhoto({
+          wxRef: wx,
+          clientReqId: CLIENT_REQ_ID,
+          filePath: '/tmp/garment.png',
+          mime: 'image/png',
+          bytes: 1024,
+          width: 1080,
+          height: 1440,
+          now: NOW
+        })
+      })
+      .then(function (png) {
+        expect(png.ok).toBe(false)
+        expect(png.code).toBe(5007)
+        expect(wx.cloud.uploadFile).not.toHaveBeenCalled()
+      })
+  })
 })

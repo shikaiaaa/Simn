@@ -1,6 +1,6 @@
 /**
  * tests/unit/pages/generating/generating-page.test.js
- * 覆盖 AC-6/8/9/10/12：轮询与等待秒数、60–65s 超时态、失败六类、恢复同一任务、
+ * 覆盖 AC-6/8/9/10/12：轮询与等待秒数、96s 超时与 101s 兜底、失败六类、恢复同一任务、
  * 404 转失败态、取消回首页、成功跳 result、失败页不出现结果图。
  */
 'use strict'
@@ -169,7 +169,7 @@ describe('generating 页：AC-8 轮询与进度展示', function () {
   })
 })
 
-describe('generating 页：AC-9 60–65s 超时', function () {
+describe('generating 页：AC-9 96s 服务端超时 / 101s 兜底', function () {
   test('服务端返回 TIMEOUT 时进入明确超时态并可重试', async function () {
     taskGetImpl = function () {
       return Promise.resolve(envelope({ taskId: 't_1', status: 'TIMEOUT', stage: 'TIMEOUT', createdAt: 1 }, 2000))
@@ -179,19 +179,21 @@ describe('generating 页：AC-9 60–65s 超时', function () {
     expect(page.data.terminal).toBe(true)
     expect(page.data.errorKind).toBe('timeout')
     expect(page.data.errorTitle).toBe('生成超时')
+    expect(page.data.errorMessage).toContain('96 秒')
     expect(page.data.canRetry).toBe(true)
     expect(page.data.loading).toBe(false)
     expect(wx.redirectTo).not.toHaveBeenCalled()
   })
 
-  test('本地硬超时 65s 兜底：停止轮询、不出图、可重试', async function () {
+  test('本地 101s 兜底：服务端无终态响应时停止轮询、不出图、可重试', async function () {
     var page = startPage({ taskId: 't_1' })
     await settle()
     expect(page.data.terminal).toBe(false)
-    page._startedAt = Date.now() - 66000
+    page._serverBase = { waitedSec: 101, at: Date.now(), elapsedMs: 101000 }
     page._tick()
     expect(page.data.terminal).toBe(true)
     expect(page.data.errorKind).toBe('timeout')
+    expect(page.data.errorMessage).toContain('101 秒')
     expect(page._clearInterval).toHaveBeenCalled()
     expect(wx.redirectTo).not.toHaveBeenCalled()
   })
@@ -199,11 +201,43 @@ describe('generating 页：AC-9 60–65s 超时', function () {
   test('59s 时仍在生成态，不提前超时', async function () {
     var page = startPage({ taskId: 't_1' })
     await settle()
-    page._startedAt = Date.now() - 59000
-    page._serverBase = { waitedSec: 2, at: Date.now() - 57000 }
+    page._serverBase = { waitedSec: 2, at: Date.now() - 57000, elapsedMs: 2000 }
     page._tick()
     expect(page.data.terminal).toBe(false)
     expect(page.data.waitedText).toMatch(/已等待 5[89] 秒/)
+    expect(page.data.slowNotice).toBe('')
+  })
+
+  test('60s 只提示「生成较慢，请稍候」，不判超时', async function () {
+    var page = startPage({ taskId: 't_1' })
+    await settle()
+    page._serverBase = { waitedSec: 60, at: Date.now(), elapsedMs: 60000 }
+    page._tick()
+    expect(page.data.terminal).toBe(false)
+    expect(page.data.slowNotice).toBe('生成较慢，请稍候')
+    expect(page.data.waitedText).toBe('已等待 60 秒')
+  })
+
+  test('96–101s 继续等待并提示更久，不提前判超时', async function () {
+    var page = startPage({ taskId: 't_1' })
+    await settle()
+    page._serverBase = { waitedSec: 97, at: Date.now(), elapsedMs: 97000 }
+    page._tick()
+    expect(page.data.terminal).toBe(false)
+    expect(page.data.slowNotice).toBe('生成时间较长，正在等待结果…')
+  })
+
+  test('服务端 96–101s 返回 TIMEOUT：立即超时，不等 101s', async function () {
+    taskGetImpl = function () {
+      return Promise.resolve(
+        envelope({ taskId: 't_1', status: 'TIMEOUT', stage: 'TIMEOUT', createdAt: 1000000 }, 1097000)
+      )
+    }
+    var page = startPage({ taskId: 't_1' })
+    await settle()
+    expect(page.data.terminal).toBe(true)
+    expect(page.data.errorKind).toBe('timeout')
+    expect(page.data.waitedSec).toBe(97)
   })
 })
 
@@ -236,6 +270,7 @@ describe('generating 页：AC-10 失败六类文案与无图', function () {
     expect(wxml).not.toContain('<image')
     expect(wxml).toContain('{{stageText}}')
     expect(wxml).toContain('{{waitedText}}')
+    expect(wxml).toContain('{{slowNotice}}')
     expect(wxml).toContain('取消生成')
     expect(wxml).toContain('重试')
     expect(wxml).toContain('返回首页')

@@ -7,10 +7,12 @@
 var polling = require('../../../../miniprogram/services/polling')
 
 describe('polling：常量与基本判定', function () {
-  test('轮询间隔 2s、退避上限 10s、硬超时 65s', function () {
+  test('轮询间隔 2s、退避上限 10s、60s 提示 / 96s 服务端超时 / 101s 兜底', function () {
     expect(polling.POLL_INTERVAL_MS).toBe(2000)
     expect(polling.MAX_BACKOFF_MS).toBe(10000)
-    expect(polling.HARD_TIMEOUT_MS).toBe(65000)
+    expect(polling.SLOW_HINT_MS).toBe(60000)
+    expect(polling.SERVER_TIMEOUT_MS).toBe(96000)
+    expect(polling.HARD_TIMEOUT_MS).toBe(101000)
   })
 
   test('终态判定：仅 SUCCEEDED/FAILED/TIMEOUT/CANCELLED', function () {
@@ -65,11 +67,56 @@ describe('polling：等待秒数与退避', function () {
     expect(polling.nextDelayMs(0)).toBe(2000)
   })
 
-  test('硬超时边界 65000ms', function () {
-    expect(polling.shouldHardTimeout(64999)).toBe(false)
-    expect(polling.shouldHardTimeout(65000)).toBe(true)
-    expect(polling.shouldHardTimeout(65001)).toBe(true)
+  test('硬超时边界 101000ms（96s + 5s 兜底）', function () {
+    expect(polling.shouldHardTimeout(100999)).toBe(false)
+    expect(polling.shouldHardTimeout(101000)).toBe(true)
+    expect(polling.shouldHardTimeout(101001)).toBe(true)
     expect(polling.shouldHardTimeout(undefined)).toBe(false)
+  })
+})
+
+describe('polling：SPEC v0.9 96s 等待态四段（AC-7/AC-9）', function () {
+  test('waitPhase 四段边界：<60s normal / 60–96s slow / 96–101s late / >=101s hard_timeout', function () {
+    expect(polling.waitPhase(0)).toBe('normal')
+    expect(polling.waitPhase(59999)).toBe('normal')
+    expect(polling.waitPhase(60000)).toBe('slow')
+    expect(polling.waitPhase(95999)).toBe('slow')
+    expect(polling.waitPhase(96000)).toBe('late')
+    expect(polling.waitPhase(100999)).toBe('late')
+    expect(polling.waitPhase(101000)).toBe('hard_timeout')
+    expect(polling.waitPhase(undefined)).toBe('normal')
+  })
+
+  test('waitHint 只在 60–101s 给出非百分比提示', function () {
+    expect(polling.waitHint(59000)).toBe('')
+    expect(polling.waitHint(60000)).toBe('生成较慢，请稍候')
+    expect(polling.waitHint(95999)).toBe('生成较慢，请稍候')
+    expect(polling.waitHint(96000)).toBe('生成时间较长，正在等待结果…')
+    expect(polling.waitHint(100999)).toBe('生成时间较长，正在等待结果…')
+    expect(polling.waitHint(101000)).toBe('')
+    ;[polling.waitHint(60000), polling.waitHint(96000)].forEach(function (text) {
+      expect(text).not.toContain('%')
+      expect(text).not.toContain('进度')
+    })
+  })
+
+  test('computeElapsedMs：serverTime - createdAt 优先，其次 waitedSec，最后本地 startedAt', function () {
+    expect(polling.computeElapsedMs({ createdAt: 1000000, serverTime: 1096500 })).toBe(96500)
+    expect(polling.computeElapsedMs({ createdAt: 1000000, serverTime: 1096500, waitedSec: 3 })).toBe(96500)
+    expect(polling.computeElapsedMs({ waitedSec: 12 })).toBe(12000)
+    expect(polling.computeElapsedMs({ startedAt: 1000, now: 4000 })).toBe(3000)
+    expect(polling.computeElapsedMs({})).toBe(0)
+  })
+
+  test('服务端 96s 超时文案不再写 60 秒；101s 兜底文案单列', function () {
+    var serverTimeout = polling.classifyFailure({ status: 'TIMEOUT' })
+    expect(serverTimeout.message).toContain('96 秒')
+    expect(serverTimeout.message).not.toContain('60 秒')
+    var hardTimeout = polling.hardTimeoutFailure()
+    expect(hardTimeout.kind).toBe('timeout')
+    expect(hardTimeout.title).toBe('生成超时')
+    expect(hardTimeout.message).toContain('101 秒')
+    expect(hardTimeout.canRetry).toBe(true)
   })
 })
 

@@ -95,8 +95,8 @@ function seedAsset(store, options) {
     cloudPath: '',
     mime: 'image/jpeg',
     bytes: 1024 * 200,
-    width: 1000,
-    height: 1500 + assetSeq,
+    width: options.width === undefined ? 1000 : options.width,
+    height: options.height === undefined ? 1500 + assetSeq : options.height,
     createdAt: createdAt,
     purgeAt: createdAt + util.PURGE_TTL_MS,
     precheck: precheckStatus

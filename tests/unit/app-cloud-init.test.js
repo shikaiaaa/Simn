@@ -20,15 +20,26 @@ function loadAppConfig() {
 
 describe('app.js 云开发环境初始化（CP-02）', function () {
   var originalCloud
+  var originalSkylineInfo
 
   beforeEach(function () {
     originalCloud = wx.cloud
+    originalSkylineInfo = wx.getSkylineInfo
     wx.cloud = { init: jest.fn() }
+    // task-64：App.onLaunch 最早期会检测 Skyline；本文件只测正常版本下的云初始化。
+    wx.getSkylineInfo = jest.fn(function () {
+      return { isSupported: true }
+    })
     jest.resetModules()
   })
 
   afterEach(function () {
     wx.cloud = originalCloud
+    if (originalSkylineInfo === undefined) {
+      delete wx.getSkylineInfo
+    } else {
+      wx.getSkylineInfo = originalSkylineInfo
+    }
     if (global.App) {
       delete global.App
     }

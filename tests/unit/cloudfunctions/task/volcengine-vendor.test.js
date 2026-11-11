@@ -106,7 +106,7 @@ describe('DEV-0001-25 火山引擎 VendorAdapter', function () {
     expect(transport.calls.query).toBe(0)
   })
 
-  test('submit：成功返回 vendorTaskId；payload 只传语义信息，不含图片缓冲', async function () {
+  test('submit：成功返回 vendorTaskId；把图片 Buffer 透传给 transport（真实 V2 需要 base64 直传）', async function () {
     var seen = null
     var transport = makeTransport({
       submit: function (payload) {
@@ -115,16 +115,20 @@ describe('DEV-0001-25 火山引擎 VendorAdapter', function () {
       }
     })
     var adapter = adapterWith(CREDS, transport)
+    var personA = Buffer.from('PERSON_IMAGE_A')
+    var personB = Buffer.from('PERSON_IMAGE_B')
+    var garment = Buffer.from('GARMENT_IMAGE')
     var result = await adapter.submit({
-      personBuffers: [Buffer.from('PERSON_IMAGE_A'), Buffer.from('PERSON_IMAGE_B')],
-      garmentBuffer: Buffer.from('GARMENT_IMAGE'),
+      personBuffers: [personA, personB],
+      garmentBuffer: garment,
       metrics: { heightCm: 175, weightKg: 70, gender: 'male' }
     })
     expect(result.vendorTaskId).toBe('vt_volc_2')
-    expect(seen.personCount).toBe(2)
-    expect(seen.hasGarment).toBe(true)
+    expect(seen.personBuffers).toHaveLength(2)
+    expect(seen.personBuffers[0]).toBe(personA)
+    expect(seen.garmentBuffer).toBe(garment)
     expect(seen.metrics).toEqual({ heightCm: 175, weightKg: 70, gender: 'male' })
-    expect(JSON.stringify(seen)).not.toMatch(/PERSON_IMAGE|GARMENT_IMAGE/)
+    expect(JSON.stringify(seen.metrics)).not.toMatch(/PERSON_IMAGE|GARMENT_IMAGE/)
   })
 
   test('submit：缺 taskId → 5005；超时 → 5002', async function () {

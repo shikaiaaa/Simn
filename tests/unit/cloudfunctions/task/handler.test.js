@@ -148,7 +148,7 @@ describe('DEV-0001-03 assetRegister', function () {
     expect(ctx.store.__countAssets()).toBe(1)
   })
 
-  test('非法参数：kind/mime/bytes/长边 → E_PARAM 1001', async function () {
+  test('非法参数：kind/fileID/clientReqId → E_PARAM 1001；供应商规格超限 → 3015', async function () {
     var ctx = await withConsentUser()
     var base = {
       clientReqId: newUuid(),
@@ -159,16 +159,25 @@ describe('DEV-0001-03 assetRegister', function () {
       width: 1000,
       height: 1500
     }
-    var cases = [
-      Object.assign({}, base, { kind: 'OTHER' }),
+    // SPEC v0.11 §B.2：超供应商规格（>5MB / 长边 >4096 / 非 JPEG）→ 3015，不再兜 1001。
+    var vendorCases = [
       Object.assign({}, base, { mime: 'image/gif' }),
       Object.assign({}, base, { bytes: 11 * 1024 * 1024 }),
-      Object.assign({}, base, { width: 5000, height: 5000 }),
+      Object.assign({}, base, { width: 5000, height: 5000 })
+    ]
+    for (var i = 0; i < vendorCases.length; i += 1) {
+      var vendorRes = await ctx.call('assetRegister', vendorCases[i])
+      expect(vendorRes.ok).toBe(false)
+      expect(vendorRes.error.code).toBe(3015)
+      expect(vendorRes.error.name).toBe('E_PRECHECK_VENDOR_LIMIT')
+    }
+    var cases = [
+      Object.assign({}, base, { kind: 'OTHER' }),
       Object.assign({}, base, { fileID: 'https://example.com/a.jpg' }),
       Object.assign({}, base, { clientReqId: 'not-a-uuid' })
     ]
-    for (var i = 0; i < cases.length; i += 1) {
-      var res = await ctx.call('assetRegister', cases[i])
+    for (var j = 0; j < cases.length; j += 1) {
+      var res = await ctx.call('assetRegister', cases[j])
       expect(res.ok).toBe(false)
       expect(res.error.code).toBe(1001)
     }
@@ -459,6 +468,24 @@ describe('DEV-0001-03 taskGet：状态机、超时、失败映射、结果转存
     expect(again.data.status).toBe('TIMEOUT')
     var userAfter = await ctx.store.getUser(USER)
     expect(userAfter.usedToday).toBe(0)
+  })
+
+  test('SINN_TASK_TIMEOUT_MS 覆写 300000ms → 60s 后仍 QUEUED/GENERATING 不判 TIMEOUT，超阈值才 TIMEOUT', async function () {
+    var ctx = await withConsentUser(Object.assign({ taskTimeoutMs: 300000, scenario: 'timeout' }, FAST))
+    var created = await createTaskWithAssets(ctx)
+    var taskId = created.res.data.taskId
+
+    ctx.clock.advance(61000)
+    var waiting = await ctx.call('taskGet', { taskId: taskId })
+    expect(waiting.ok).toBe(true)
+    expect(['QUEUED', 'GENERATING']).toContain(waiting.data.status)
+    expect(waiting.data.failure).toBeUndefined()
+    expect((await ctx.store.getTask(taskId)).status).not.toBe('TIMEOUT')
+
+    ctx.clock.advance(240000)
+    var timedOut = await ctx.call('taskGet', { taskId: taskId })
+    expect(timedOut.data.status).toBe('TIMEOUT')
+    expect(timedOut.data.failure.code).toBe(5002)
   })
 
   test('供应商内容拦截 → FAILED + 4001 E_CONTENT_BLOCKED，额度返还', async function () {

@@ -289,3 +289,67 @@ describe('result 页：缩放复位与删除本次', () => {
     expect(wx.reLaunch).toHaveBeenCalledWith(expect.objectContaining({ url: '/pages/index/index' }));
   });
 });
+
+describe('result 页：AC-7 端到端计时埋点（SPEC v0.9）', function () {
+  var appMock;
+
+  beforeEach(function () {
+    wx.__reset();
+    wx.__setMock('getStorageSync', function () {
+      return '';
+    });
+    mockCloud(function () {
+      return wx.__success(successResult());
+    });
+    appMock = { globalData: {} };
+    global.getApp = function () {
+      return appMock;
+    };
+  });
+
+  afterEach(function () {
+    delete global.getApp;
+    jest.restoreAllMocks();
+  });
+
+  test('结果页 onload 记录 createdAt/resultReadyAt/elapsedMs，结构化日志且不写 Storage', function () {
+    var info = jest.spyOn(console, 'info').mockImplementation(function () {});
+    var createdAt = Date.now() - 5000;
+    appMock.globalData.ac7Timing = { requestId: 'req-createTask', taskId: 't_1', createdAt: createdAt };
+    var page = createPage();
+    page.onLoad({ taskId: 't_1' });
+
+    var record = appMock.globalData.ac7Last;
+    expect(record.requestId).toBe('req-createTask');
+    expect(record.taskId).toBe('t_1');
+    expect(record.createdAt).toBe(createdAt);
+    expect(record.resultReadyAt).toBeGreaterThanOrEqual(createdAt + 5000);
+    expect(record.elapsedMs).toBeGreaterThanOrEqual(5000);
+    expect(record.elapsedMs).toBeLessThanOrEqual(96000);
+    expect(appMock.globalData.ac7Timing).toBeNull();
+
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info.mock.calls[0][0]).toBe('[sinn/ac7]');
+    var payload = JSON.parse(info.mock.calls[0][1]);
+    expect(Object.keys(payload).sort()).toEqual(['createdAt', 'elapsedMs', 'requestId', 'resultReadyAt', 'taskId']);
+    expect(payload).not.toHaveProperty('fileID');
+    expect(payload).not.toHaveProperty('imageUrl');
+    expect(JSON.stringify(payload)).not.toContain('base64');
+    expect(wx.setStorageSync).not.toHaveBeenCalled();
+  });
+
+  test('无 ac7Timing 或 taskId 不匹配时不记录、不打印', function () {
+    var info = jest.spyOn(console, 'info').mockImplementation(function () {});
+    var page = createPage();
+    page.onLoad({ taskId: 't_1' });
+    expect(appMock.globalData.ac7Last).toBeUndefined();
+    expect(info).not.toHaveBeenCalled();
+
+    appMock.globalData.ac7Timing = { requestId: 'req-other', taskId: 't_other', createdAt: 123 };
+    page = createPage();
+    page.onLoad({ taskId: 't_1' });
+    expect(appMock.globalData.ac7Last).toBeUndefined();
+    expect(appMock.globalData.ac7Timing.taskId).toBe('t_other');
+    expect(info).not.toHaveBeenCalled();
+  });
+});

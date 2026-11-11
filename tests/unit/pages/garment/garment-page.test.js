@@ -54,6 +54,9 @@ var createTaskResult = { ok: true, taskId: 't_1' }
 
 beforeEach(function () {
   wx.__reset()
+  delete wx.createOffscreenCanvas
+  delete wx.canvasToTempFilePath
+  delete wx.getFileInfo
   wx.getStorageSync = jest.fn(function (key) {
     return key === 'sinn_consent_v1' ? CONSENT : ''
   })
@@ -161,7 +164,7 @@ describe('garment 页：单张上装与 L0', function () {
     })
   })
 
-  test('L0 拦截超限照片，不进入槽位、不上传', function () {
+  test('超限照片自动压缩；无 Canvas 能力时提示处理失败、不进入槽位、不上传', function () {
     wx.chooseMedia = jest.fn(function (options) {
       options.success({ tempFiles: [{ tempFilePath: '/tmp/big.jpg', size: 11 * 1024 * 1024, fileType: 'image/jpeg' }] })
     })
@@ -169,8 +172,53 @@ describe('garment 页：单张上装与 L0', function () {
     page.onLoad()
     return page.onPickPhoto(pickEvent(-1)).then(function () {
       expect(page.data.photo).toBeNull()
-      expect(page.data.errorText).toContain('10MB')
+      expect(page.data.errorText).toContain('照片处理失败')
       expect(wx.cloud.uploadFile).not.toHaveBeenCalled()
+    })
+  })
+
+  test('大图压缩后进入槽位、提示已自动压缩、上传使用压缩路径（AC-27）', function () {
+    wx.chooseMedia = jest.fn(function (options) {
+      options.success({ tempFiles: [{ tempFilePath: '/tmp/big.jpg', size: 12 * 1024 * 1024, fileType: 'image/jpeg' }] })
+    })
+    wx.getImageInfo = jest.fn(function (options) {
+      options.success({ width: 6000, height: 4000, orientation: 'up', type: 'jpeg' })
+    })
+    var canvas = {
+      getContext: jest.fn(function () {
+        return { save: jest.fn(), translate: jest.fn(), scale: jest.fn(), rotate: jest.fn(), drawImage: jest.fn(), restore: jest.fn() }
+      }),
+      createImage: jest.fn(function () {
+        var image = {}
+        Object.defineProperty(image, 'src', {
+          set: function () {
+            if (image.onload) image.onload()
+          }
+        })
+        return image
+      })
+    }
+    wx.createOffscreenCanvas = jest.fn(function () {
+      return canvas
+    })
+    wx.canvasToTempFilePath = jest.fn(function (opts) {
+      opts.success({ tempFilePath: '/tmp/garment-compressed.jpg' })
+    })
+    wx.getFileInfo = jest.fn(function (opts) {
+      var size = wx.getFileInfo.mock.calls.length === 1 ? 8 * 1024 * 1024 : 4 * 1024 * 1024
+      opts.success({ size: size })
+    })
+    var page = createPage()
+    page.onLoad()
+    return page.onPickPhoto(pickEvent(-1)).then(function () {
+      expect(page.data.photo.path).toBe('/tmp/garment-compressed.jpg')
+      expect(page.data.compressionNote).toContain('已自动压缩照片')
+      expect(page.data.compressionNote).toContain('6000→4096')
+      return page.onStart().then(function () {
+        expect(wx.cloud.uploadFile).toHaveBeenCalled()
+        expect(wx.cloud.uploadFile.mock.calls[0][0].filePath).toBe('/tmp/garment-compressed.jpg')
+        expect(callsOfAction('createTask').length).toBe(1)
+      })
     })
   })
 })
@@ -211,6 +259,12 @@ describe('garment 页：createTask 成功与失败', function () {
         expect(wx.navigateTo).toHaveBeenCalledTimes(1)
         expect(wx.navigateTo.mock.calls[0][0].url).toBe('/pages/generating/generating?taskId=t_1')
         expect(appMock.globalData.captureDraft).toBeNull()
+        // AC-7 埋点：仅内存记录计时起点，不写 Storage、不含照片信息。
+        expect(appMock.globalData.ac7Timing).toEqual({
+          requestId: 'req-createTask',
+          taskId: 't_1',
+          createdAt: 1
+        })
         expect(wx.setStorageSync).not.toHaveBeenCalled()
       })
     })

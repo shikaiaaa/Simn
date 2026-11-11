@@ -202,6 +202,223 @@ async function runGeneration(ctx, options) {
   return { taskId, elapsedMs, resultPage, task: await taskGet(mp, taskId) };
 }
 
+/* ------------------------------------------------------------------ */
+/* DEF-0009（result/profile/generating 三页无法滚动，用户真机反馈）回归工具 */
+/* ------------------------------------------------------------------ */
+
+/** 读取当前页滚动容器状态：scrollTop / 视口高 / 内容高 / 是否溢出。 */
+async function scrollMetrics(mp) {
+  const layout = await h.evaluate(mp, function () {
+    var q = wx.createSelectorQuery();
+    q.select('.page-scroll').fields({ scrollOffset: true, rect: true, size: true });
+    q.select('.page-body').boundingClientRect();
+    return new Promise(function (resolve) {
+      q.exec(function (res) {
+        resolve({ scroller: (res && res[0]) || null, body: (res && res[1]) || null });
+      });
+    });
+  });
+  let sys = {};
+  try {
+    sys = await mp.systemInfo();
+  } catch (e) {
+    sys = {};
+  }
+  const scroller = layout.scroller || {};
+  let scrollTop = scroller.scrollTop;
+  if (typeof scrollTop !== 'number') {
+    try {
+      const page = await h.currentPage(mp);
+      const el = await page.$('.page-scroll');
+      if (el && typeof el.property === 'function') {
+        const v = await el.property('scrollTop');
+        if (typeof v === 'number') scrollTop = v;
+      }
+    } catch (e) {
+      // 保持 undefined，调用方按无法读取处理
+    }
+  }
+  const bodyHeight = layout.body ? layout.body.height : null;
+  const scrollerHeight = typeof scroller.height === 'number' ? scroller.height : null;
+  return {
+    windowHeight: sys.windowHeight || null,
+    scrollTop: typeof scrollTop === 'number' ? scrollTop : null,
+    scrollerHeight,
+    bodyHeight,
+    contentOverflow: !!(bodyHeight && scrollerHeight && bodyHeight > scrollerHeight + 8),
+  };
+}
+
+/** 读取元素 boundingClientRect（视口坐标，滚动后随之变化）。 */
+async function rectOf(mp, selector) {
+  return h.evaluate(
+    mp,
+    function (sel) {
+      var q = wx.createSelectorQuery();
+      q.select(sel).boundingClientRect();
+      return new Promise(function (resolve) {
+        q.exec(function (res) {
+          resolve((res && res[0]) || null);
+        });
+      });
+    },
+    selector
+  );
+}
+
+/**
+ * 把当前页 .page-scroll 滚到底。
+ * 依次尝试 automator ScrollViewElement.scrollTo / 小程序内 node.scrollTo 两种形态；
+ * 若均无法改变 scrollTop（Skyline + automator connect 已知限制 T-7），返回 method='structural'，
+ * 由调用方改做结构断言（滚动容器存在 + 内容溢出 + 目标在最大滚动位置可达）。
+ */
+async function scrollToBottom(mp) {
+  const page = await h.currentPage(mp);
+  const scroller = await page.$('.page-scroll');
+  if (!scroller) throw new Error(`[assert] ${page.path} 缺少 .page-scroll 滚动容器，无法执行滚动可达断言`);
+  const tagName = scroller.tagName || null;
+  let scrollY = null;
+  try {
+    scrollY = await scroller.attribute('scroll-y');
+  } catch (e) {
+    scrollY = null;
+  }
+  const before = await scrollMetrics(mp);
+  const target = Math.max((before.bodyHeight || 2000) + 800, (before.scrollerHeight || 700) * 2);
+  const attempts = [];
+  let after = before;
+  const changed = () => (after.scrollTop || 0) > (before.scrollTop || 0);
+  const finish = (label) => ({
+    page,
+    before,
+    after,
+    target,
+    moved: (after.scrollTop || 0) - (before.scrollTop || 0),
+    method: label,
+    attempts,
+    realScroll: changed(),
+    tagName,
+    scrollY,
+  });
+  async function measure(label) {
+    await h.sleep(650);
+    after = await scrollMetrics(mp);
+    attempts.push({ method: label, scrollTop: after.scrollTop, moved: changed() });
+    return changed();
+  }
+
+  if (typeof scroller.scrollTo === 'function') {
+    try {
+      await scroller.scrollTo(0, target);
+    } catch (e) {
+      attempts.push({ method: 'element.scrollTo(0,y)', error: e.message });
+    }
+    if (await measure('element.scrollTo(0,y)')) return finish('element.scrollTo(0,y)');
+  }
+
+  const nodeObject = await h.evaluate(
+    mp,
+    function (y) {
+      var q = wx.createSelectorQuery();
+      q.select('.page-scroll').node();
+      return new Promise(function (resolve) {
+        q.exec(function (res) {
+          var node = res && res[0] && res[0].node;
+          if (!node || typeof node.scrollTo !== 'function') return resolve({ ok: false, why: 'no node.scrollTo' });
+          try {
+            node.scrollTo({ top: y, left: 0, animated: false });
+            resolve({ ok: true });
+          } catch (e) {
+            resolve({ ok: false, why: e.message });
+          }
+        });
+      });
+    },
+    target
+  );
+  attempts.push({ method: 'node.scrollTo(object)', exec: nodeObject });
+  if (await measure('node.scrollTo(object)')) return finish('node.scrollTo(object)');
+
+  const nodeTwoArg = await h.evaluate(
+    mp,
+    function (y) {
+      var q = wx.createSelectorQuery();
+      q.select('.page-scroll').node();
+      return new Promise(function (resolve) {
+        q.exec(function (res) {
+          var node = res && res[0] && res[0].node;
+          if (!node) return resolve({ ok: false, why: 'no node' });
+          try {
+            node.scrollTo(0, y);
+            resolve({ ok: true });
+          } catch (e) {
+            resolve({ ok: false, why: e.message });
+          }
+        });
+      });
+    },
+    target
+  );
+  attempts.push({ method: 'node.scrollTo(0,y)', exec: nodeTwoArg });
+  if (await measure('node.scrollTo(0,y)')) return finish('node.scrollTo(0,y)');
+
+  return finish('structural');
+}
+
+/**
+ * 断言 targets 可达。
+ * - mode='actual'：滚动后 rect 直接进入视口（top < windowHeight 且 bottom > 0）；
+ * - mode='structural'：automator 无法驱动 Skyline 滚动时（T-7），断言目标在「最大滚动位置」下进入视口：
+ *   projectedTop = rect.top - maxScroll，且 projectedTop < windowHeight、projectedTop + height > 0。
+ */
+async function assertReachable(mp, pagePath, windowHeight, targets, opts) {
+  opts = opts || {};
+  const mode = opts.mode || 'actual';
+  const maxScroll = Math.max(0, Number(opts.maxScroll) || 0);
+  const results = [];
+  const page = await h.currentPage(mp);
+  for (const item of targets) {
+    const rect = await rectOf(mp, item.selector);
+    const el = await page.$(item.selector);
+    let text = null;
+    if (el) {
+      try {
+        text = await el.text();
+      } catch (e) {
+        text = null;
+      }
+    }
+    const directVisible = !!rect && rect.height > 0 && rect.top < windowHeight && rect.bottom > 0;
+    const projectedTop = rect ? rect.top - maxScroll : null;
+    const projectedVisible = !!rect && rect.height > 0 && projectedTop < windowHeight && projectedTop + rect.height > 0;
+    const visible = mode === 'structural' ? projectedVisible : directVisible;
+    results.push({
+      selector: item.selector,
+      label: item.label,
+      text: text ? text.trim() : null,
+      rect: rect || null,
+      windowHeight: windowHeight,
+      mode: mode,
+      maxScroll: maxScroll,
+      projectedTop: projectedTop,
+      visible: visible,
+      clickable: !!el && visible,
+    });
+    if (!visible) {
+      throw new Error(
+        `[assert] ${pagePath} ${mode === 'structural' ? '最大滚动位置（结构断言）' : '滚动到底'}后「${item.label}」(${item.selector}) 不可达：` +
+          ` rect=${JSON.stringify(rect)} windowHeight=${windowHeight} maxScroll=${maxScroll}`
+      );
+    }
+  }
+  return results;
+}
+
+function sha256File(relPath) {
+  const abs = path.isAbsolute(relPath) ? relPath : path.join(h.ROOT, relPath);
+  return crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex').toUpperCase();
+}
+
 const CASES = [
   /* ------------------------------------------------------------------ */
   {
@@ -1240,6 +1457,278 @@ const CASES = [
         throw new Error(`[assert] 预检失败不应消耗额度（before=${quotaBefore.used}, after=${quotaAfter.used}）`);
       }
       ctx.write('ac2-24-precheck.json', evidence);
+      return evidence;
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /* DEF-0009 回归：三页滚动容器 + 底部操作可达（用户真机反馈无法上下滑动） */
+  {
+    id: 'TC-0001-L3-013',
+    tc: 'TC-0001-L3-013',
+    ac: 'AC-19 / AC-23',
+    title: 'DEF-0009 回归：result/profile/generating 可滚动到底，底部操作按钮进入视口可点击',
+    priority: 'P0',
+    requires: ['login', 'cloud', 'fixtures:MAT-01', 'fixtures:MAT-08'],
+    steps: [
+      '真实生成一次（mock vendor）拿到成功结果页；滚到底后断言 scrollTop>0，且「返回首页」「删除本次结果」rect 进入视口',
+      '点「返回首页」验证可点击（不点删除，避免破坏数据），再进入我的页滚到底，断言「删除全部数据/返回首页」可达',
+      'generating 页注入长 errorMessage（仅布局回归）后滚到底，断言「返回首页」可达；失败输出 pagePath/scrollTop/rect/截图',
+    ],
+    async run(ctx) {
+      const { mp } = ctx;
+      const evidence = { case: 'TC-0001-L3-013', def: 'DEF-0009', pages: {} };
+
+      // 1) result 页：真实生成一次（消耗 1 次额度；mock vendor 约 8–60s 由环境决定）。
+      const gen = await runGeneration(ctx, { personMat: ['MAT-01'], garmentMat: ['MAT-08'] });
+      evidence.resultTaskId = gen.taskId;
+      evidence.generationElapsedMs = gen.elapsedMs;
+      const resultPath = h.normalizeRoute((await h.currentPage(mp)).path);
+      if (resultPath !== '/pages/result/result') {
+        throw new Error(`[assert] 生成成功后应进入结果页，实际 ${resultPath}`);
+      }
+      const beforeShot = await h.screenshot(mp, ctx.runDir, 'ac13-result-before-scroll');
+      const resultScroll = await scrollToBottom(mp);
+      const windowHeight = resultScroll.after.windowHeight || resultScroll.before.windowHeight;
+      const resultOverflow = !!resultScroll.after.contentOverflow;
+      const resultMaxScroll =
+        resultOverflow && resultScroll.after.bodyHeight && resultScroll.after.scrollerHeight
+          ? Math.max(0, Math.round(resultScroll.after.bodyHeight - resultScroll.after.scrollerHeight))
+          : 0;
+      const resultMode = resultScroll.realScroll ? 'actual' : 'structural';
+      const resultTargets = await assertReachable(
+        mp,
+        resultPath,
+        windowHeight,
+        [
+          { selector: '.btn-danger', label: '删除本次结果' },
+          { selector: '.btn-secondary', label: '返回首页' },
+        ],
+        { mode: resultMode, maxScroll: resultMaxScroll }
+      );
+      const afterShot = await h.screenshot(mp, ctx.runDir, 'ac13-result-after-scroll');
+      evidence.pages.result = {
+        path: resultPath,
+        before: resultScroll.before,
+        after: resultScroll.after,
+        moved: resultScroll.moved,
+        scrollMethod: resultScroll.method,
+        realScroll: resultScroll.realScroll,
+        scrollAttempts: resultScroll.attempts,
+        container: { tagName: resultScroll.tagName, scrollY: resultScroll.scrollY },
+        overflow: resultOverflow,
+        maxScroll: resultMaxScroll,
+        assertMode: resultMode,
+        targets: resultTargets,
+        screenshots: { before: beforeShot, after: afterShot },
+      };
+      if (resultScroll.tagName !== 'scroll-view') {
+        throw new Error(`[assert] result 页 .page-scroll 实际容器为 ${resultScroll.tagName}（不是 scroll-view），DEF-0009 回归失败`);
+      }
+      if (resultOverflow && !resultScroll.realScroll) {
+        evidence.pages.result.toolchainNote =
+          'T-7：Skyline scroll-view 在 automator connect 下无法被驱动（element.scrollTo / node.scrollTo / 手势均 scrollTop=0），改用结构断言：.page-scroll 为 scroll-view + 内容溢出 + 目标按钮在最大滚动位置进入视口；真实手指滑动属 CP-12，不得写「已验证」。';
+      } else if (resultOverflow) {
+        evidence.pages.result.toolchainNote = '真实滚动可用（scrollTop>0），按视口 rect 断言；真机手指滑动仍属 CP-12。';
+      } else {
+        evidence.pages.result.toolchainNote = '本机视口 result 内容未超一屏（overflow=false），按钮直接可达。';
+      }
+
+      // 点「返回首页」验证滚动后的按钮真实可点击（不点「删除本次结果」，避免破坏证据数据）。
+      const resultPage = await h.currentPage(mp);
+      const backBtn = await resultPage.$('.btn-secondary');
+      if (!backBtn) throw new Error('[assert] 结果页缺少「返回首页」按钮');
+      await backBtn.tap();
+      await h.waitRoute(mp, '/pages/index/index', 30000);
+      evidence.pages.result.clickedBackHome = true;
+
+      // 2) profile 页：滚到底断言底部操作可达。
+      const indexPage = await h.currentPage(mp);
+      const profileEntry = await indexPage.$('.btn-ghost');
+      if (!profileEntry) throw new Error('[assert] 首页缺少「我的」入口（.btn-ghost）');
+      await profileEntry.tap();
+      await h.waitRoute(mp, '/pages/profile/profile', 30000);
+      const profilePath = h.normalizeRoute((await h.currentPage(mp)).path);
+      const profileBeforeShot = await h.screenshot(mp, ctx.runDir, 'ac13-profile-before-scroll');
+      const profileScroll = await scrollToBottom(mp);
+      const profileWindowHeight = profileScroll.after.windowHeight || profileScroll.before.windowHeight;
+      const profileOverflow = !!profileScroll.after.contentOverflow;
+      const profileMaxScroll =
+        profileOverflow && profileScroll.after.bodyHeight && profileScroll.after.scrollerHeight
+          ? Math.max(0, Math.round(profileScroll.after.bodyHeight - profileScroll.after.scrollerHeight))
+          : 0;
+      const profileMode = profileScroll.realScroll ? 'actual' : 'structural';
+      const profileTargets = await assertReachable(
+        mp,
+        profilePath,
+        profileWindowHeight,
+        [
+          { selector: '.btn-secondary', label: '删除全部数据' },
+          { selector: '.btn-ghost', label: '返回首页' },
+        ],
+        { mode: profileMode, maxScroll: profileMaxScroll }
+      );
+      const profileAfterShot = await h.screenshot(mp, ctx.runDir, 'ac13-profile-after-scroll');
+      evidence.pages.profile = {
+        path: profilePath,
+        before: profileScroll.before,
+        after: profileScroll.after,
+        moved: profileScroll.moved,
+        targets: profileTargets,
+        screenshots: { before: profileBeforeShot, after: profileAfterShot },
+      };
+      evidence.pages.profile.overflow = profileOverflow;
+      evidence.pages.profile.scrollMethod = profileScroll.method;
+      evidence.pages.profile.realScroll = profileScroll.realScroll;
+      evidence.pages.profile.maxScroll = profileMaxScroll;
+      evidence.pages.profile.assertMode = profileMode;
+      evidence.pages.profile.container = { tagName: profileScroll.tagName, scrollY: profileScroll.scrollY };
+      if (profileScroll.tagName !== 'scroll-view') {
+        throw new Error(`[assert] profile 页 .page-scroll 实际容器为 ${profileScroll.tagName}（不是 scroll-view），DEF-0009 回归失败`);
+      }
+      if (profileOverflow && !profileScroll.realScroll) {
+        evidence.pages.profile.toolchainNote =
+          'T-7：Skyline scroll-view 在 automator connect 下无法被驱动，采用结构断言（scroll-view + 内容溢出 + 目标按钮在最大滚动位置进入视口）；真机手指滑动属 CP-12。';
+      } else if (profileOverflow) {
+        evidence.pages.profile.toolchainNote = '真实滚动可用（scrollTop>0）；真机手指滑动仍属 CP-12。';
+      } else {
+        evidence.pages.profile.toolchainNote = '本机视口下 profile 内容未超一屏（overflow=false）；底部按钮直接可达。';
+      }
+
+      // 3) generating 页：注入长 errorMessage 仅验证滚动容器布局（不覆盖真实长文案产品路径）。
+      const fakeTaskId = 't_e2e00000000000000000000';
+      await h.appReLaunch(mp, `/pages/generating/generating?taskId=${encodeURIComponent(fakeTaskId)}`);
+      const genPage = await h.waitFor(
+        async () => {
+          const page = await mp.currentPage();
+          if (!page || h.normalizeRoute(page.path) !== '/pages/generating/generating') return null;
+          const title = await page.$('.generating-error-title');
+          return title ? page : null;
+        },
+        30000,
+        500,
+        'generating 失败态渲染'
+      );
+      const genPath = h.normalizeRoute(genPage.path);
+      const genBeforeShot = await h.screenshot(mp, ctx.runDir, 'ac13-generating-before-scroll');
+      const longText = '这是用于验证滚动容器的长文案，仅测试布局，不代表真实产品文案。'.repeat(60);
+      await genPage.setData({ errorMessage: longText });
+      await h.sleep(900);
+      let genScroll = await scrollToBottom(mp);
+      if (!genScroll.after.contentOverflow) {
+        // 一次加长仍不溢出时，再放大一档（仅布局回归）。
+        await genPage.setData({ errorMessage: longText.repeat(2) });
+        await h.sleep(900);
+        genScroll = await scrollToBottom(mp);
+      }
+      const genWindowHeight = genScroll.after.windowHeight || genScroll.before.windowHeight;
+      const genOverflow = !!genScroll.after.contentOverflow;
+      const genMaxScroll =
+        genOverflow && genScroll.after.bodyHeight && genScroll.after.scrollerHeight
+          ? Math.max(0, Math.round(genScroll.after.bodyHeight - genScroll.after.scrollerHeight))
+          : 0;
+      const genMode = genScroll.realScroll ? 'actual' : 'structural';
+      const genTargets = await assertReachable(
+        mp,
+        genPath,
+        genWindowHeight,
+        [{ selector: '.btn-secondary', label: '返回首页' }],
+        { mode: genMode, maxScroll: genMaxScroll }
+      );
+      const genAfterShot = await h.screenshot(mp, ctx.runDir, 'ac13-generating-after-scroll');
+      evidence.pages.generating = {
+        path: genPath,
+        injectedLongText: true,
+        injectionNote: '通过 page.setData 注入长 errorMessage，仅验证 scroll-view 容器布局与底部按钮可达；不覆盖真实长文案产品路径（真机长文案/小视口由 CP-12 人工项覆盖）。',
+        before: genScroll.before,
+        after: genScroll.after,
+        moved: genScroll.moved,
+        scrollMethod: genScroll.method,
+        realScroll: genScroll.realScroll,
+        maxScroll: genMaxScroll,
+        assertMode: genMode,
+        container: { tagName: genScroll.tagName, scrollY: genScroll.scrollY },
+        overflow: genOverflow,
+        targets: genTargets,
+        screenshots: { before: genBeforeShot, after: genAfterShot },
+      };
+      if (!genOverflow) {
+        throw new Error('[assert] 注入长文案后 generating 页内容仍未超一屏，无法验证滚动容器（请检查 .page-scroll 结构或注入长度）');
+      }
+      if (genScroll.tagName !== 'scroll-view') {
+        throw new Error(`[assert] generating 页 .page-scroll 实际容器为 ${genScroll.tagName}（不是 scroll-view），DEF-0009 回归失败`);
+      }
+      if (!genScroll.realScroll) {
+        evidence.pages.generating.toolchainNote =
+          'T-7：Skyline scroll-view 在 automator connect 下无法被驱动（element.scrollTo / node.scrollTo / 手势均 scrollTop=0），采用结构断言（scroll-view + 内容溢出 + 目标按钮在最大滚动位置进入视口）；真机手指滑动属 CP-12，不得写「已验证」。';
+      }
+      // 真实 tap「返回首页」验证按钮可点击（不依赖视觉滚动）。
+      const genPageNow = await h.currentPage(mp);
+      const genBack = await genPageNow.$('.btn-secondary');
+      if (!genBack) throw new Error('[assert] generating 页缺少「返回首页」按钮');
+      await genBack.tap();
+      await h.waitRoute(mp, '/pages/index/index', 30000);
+      evidence.pages.generating.clickedBackHome = true;
+
+      // 记录证据文件哈希（截图 + 本 JSON 由 runner 落盘）。
+      evidence.sha256 = {};
+      const shots = [
+        beforeShot,
+        afterShot,
+        profileBeforeShot,
+        profileAfterShot,
+        genBeforeShot,
+        genAfterShot,
+      ].filter(Boolean);
+      shots.forEach((rel) => {
+        evidence.sha256[rel] = sha256File(rel);
+      });
+      ctx.write('ac13-scroll.json', evidence);
+      return evidence;
+    },
+  },
+  {
+    id: 'TC-0001-L3-014',
+    tc: 'TC-0001-L3-014',
+    ac: 'AC-29',
+    title: 'AC-29 供应商输入规格对齐：端上压缩决策/档位/错误码/提示（离线契约场景 ①–④）',
+    priority: 'P0',
+    offline: true,
+    requires: [],
+    steps: [
+      '离线驱动生产模块 photo-adapt.compressToVendorSpec（注入 renderJpeg/sizeOf deps）：① 6MB/4000px → ≤5MB 且长边 ≤4096、提示「已自动优化照片（供应商限制）」',
+      '② 质量档用尽仍超 → 4096→3072→2048 逐档降尺寸，断言最终长边/字节与尝试档位顺序',
+      '③ 长边 <1024 / 解码失败 / 全档用尽 → 3014「分辨率过低，请重拍」或 5007「照片处理失败，请重试或更换照片」；契约层不触达 uploadFile/createTask（页面级 spy 由 L2 单测覆盖），assertVendorSpec 二次断言兜底',
+      '④ 2048px/2MB 小图 → 不压缩、无提示、字节与长边保持原值；失败输出场景、错误码、压缩参数与计数桩',
+    ],
+    async run(ctx) {
+      // 离线契约用例：不依赖 automator/云环境；页面 UI 与真实 canvas 压缩由 L2/CP-12 覆盖。
+      const ac29 = require('./ac29-scenarios');
+      const summary = await ac29.runScenarios();
+      const evidence = {
+        case: 'TC-0001-L3-014',
+        ac: 'AC-29',
+        kind: 'offline-contract',
+        executedBy: 'tests/e2e/lib/ac29-scenarios.js（生产模块 photo-adapt.js + 注入 deps）',
+        sourceNote: '不由 automator 驱动页面 UI；不触达 wx.uploadFile/createTask；真实 canvas 压缩字节/耗时/内存需真机 CP-12，不得写「已验证」。',
+        environment: {
+          needsDevtools: false,
+          needsCloud: false,
+          module: 'miniprogram/services/photo-adapt.js',
+        },
+        total: summary.total,
+        pass: summary.pass,
+        fail: summary.fail,
+        scenarios: summary.results,
+      };
+      ctx.write('ac29-compress.json', evidence);
+      if (summary.fail > 0) {
+        const failed = summary.results
+          .filter((r) => r.status !== 'pass')
+          .map((r) => `${r.id}: ${(r.evidence.failure && r.evidence.failure.message) || 'failed'}`)
+          .join('; ');
+        throw new Error(`[assert] AC-29 离线场景 ${summary.fail}/${summary.total} 失败：${failed}`);
+      }
       return evidence;
     },
   },
