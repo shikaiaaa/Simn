@@ -31,7 +31,8 @@
         "为 6 个后续页面创建最小占位四件套（占位文件由各页面任务覆盖，占位文件不登记写范围以保持门禁 WARN=0；SPEC A 节已约定）",
         "services/api.js：统一 wx.cloud.callFunction 封装，含统一响应包裹解析、错误码到用户文案映射、requestId 透传、超时、幂等 clientReqId 生成、同意前置校验；业务页面不直接裸调 callFunction",
         "首页：功能说明、开始入口、恢复进行中任务入口、我的入口；文案无承诺词与导购词（对照 AC-23 正则）",
-        "L1 单测覆盖：成功、业务失败、网络失败、超时、未同意、恢复入口分支",
+        "启动低版本检测与兜底（REQ v0.7 S12/BR-13/AC-28）：`App.onLaunch` 最早期（先于 `wx.cloud.init` 与任何业务请求）以 `typeof wx.getSkylineInfo === 'function'` + `try/catch` 判定；API 缺失或返回不支持 → 判低版本，走原生 `wx.showModal` 提示「当前微信版本过低（需 8.0.30 及以上），请在应用商店升级后重试」+ 用户确认后 `wx.exitMiniProgram`；低版本不初始化业务（云函数 0 次、Storage 读写 0 次、上传 0 次、隐私 API 0 次）、不渲染 skyline 业务页、不白屏、不静默失败；不新增页面（旧版无法渲染 skyline）；业务页 `onLoad` 防御性 return；正常版本（Skyline 可用）不触发兜底（AC-28①②④）",
+        "L1 单测覆盖：成功、业务失败、网络失败、超时、未同意、恢复入口分支、低版本三分支（`wx.getSkylineInfo` 缺失/不支持/支持）+ 正常版本回归（AC-28③）",
         "check-wxapp.ps1 在占位阶段 FAIL=0（app.json 中每个页面存在 .js 与 .wxml），把门禁输出原文记入交接"
       ],
       "estimate": "1d"
@@ -45,11 +46,12 @@
       "acceptance": [
         "实现 actions：assetRegister、precheck、createTask、taskGet、cancelTask、deleteTask、auditTask（auditTask 仅测试环境 + QA openid 白名单），统一响应包裹与错误码按 SPEC B 节",
         "VendorAdapter 六方法契约（validate/submit/query/cancel/erase/health）+ MockVendorAdapter 契约桩（确定性 fixture：pass/fail/unknown、排队/成功/失败/超时/内容拦截，支持注入延迟）+ PrecheckAdapter（视觉模型或规则，方案待选型）+ `VolcengineVendorAdapter`（P1 指定供应商=火山引擎「图片换装 V2」：health/submit/query/validate（无独立预检端点则返回 unknown）/cancel/erase（无能力返回 `unsupported`）；仅读云函数环境变量 `SINN_VOLC_AK`/`SINN_VOLC_SK`/`SINN_VOLC_REGION`，未配置时 health 返回未就绪、不得当可用）+ `HttpVendorAdapter` 通用 HTTP 骨架（可选）；`SINN_VENDOR=mock|volcengine|tencentmps|perfectcorp|aliyun`，`mock` 为默认，`volcengine` 为 P1 指定真实 provider，其余仅保留枚举（备选不实现）；CP-04b/c/d 未就绪不阻塞开发，映射见 SPEC §B.4",
-        "预检三态契约：`validate` 返回 `{status:\"pass\"|\"fail\"|\"unknown\", checks[]}`，**`unknown` 不得当 pass**；供应商无独立预检端点（SPIKE-0001 §6；火山引擎「图片换装 V2」是否有 validate 端点待 CP-04d 凭证实测确认）→ 服务端 PrecheckAdapter 二次校验 + 供应商失败码映射兜底；unknown 返回 `pass:false` + E_PRECHECK_UNKNOWN(3013)，契约桩 fixture 驱动 AC-2/3/4/5/24",
+        "预检三态契约：`validate` 返回 `{status:\"pass\"|\"fail\"|\"unknown\", checks[]}`，**`unknown` 不得当 pass**；供应商无独立预检端点（SPIKE-0001 §6；火山引擎「图片换装 V2」是否有 validate 端点待 CP-04d 凭证实测确认）→ 服务端 PrecheckAdapter 二次校验 + 供应商失败码映射兜底；unknown 返回 `pass:false` + E_PRECHECK_UNKNOWN(3013)，契约桩 fixture 驱动 AC-2/3/4/5/24；长边 <1024px 或压缩后仍超限的兜底返回 E_PRECHECK_TOO_SMALL(3014)（不放大，BR-12/AC-27③）",
         "火山错误码→内部错误码映射（SPEC §B.4）：鉴权失败/签名错误/欠费/未开通/限流/5xx→E_VENDOR_UNAVAILABLE；任务超时/长时间无终态→E_TIMEOUT；响应不可解析/字段缺失/未知状态→E_VENDOR_RESPONSE_INVALID；内容安全类→E_CONTENT_BLOCKED；输入/人体不合格类→E_PRECHECK_*(422)；未识别记 vendorCode 并按 E_VENDOR_UNAVAILABLE 兜底（真实错误码清单待 CP-04d 实测补充，不得虚构）",
+        "服务端供应商输入规格校验（REQ v0.8 BR-14/AC-29）：assetRegister/createTask 前校验 bytes ≤5MB、max(w,h) ≤4096、mime=image/jpeg，任一不满足返回 E_PRECHECK_VENDOR_LIMIT(3015)（hint 明确「照片超出供应商规格（≤5MB、长边 ≤4096）」），不提交供应商、不建任务、不扣额度；供应商 50411/50412/50413 等参数类错误映射 3015（不得兜底成 5001，5001 仅网络/鉴权/限流/余额）；失败任务持久化 `failure{code,name,hint,vendorCode,httpStatus,at}`（脱敏，不含图像）（BR-14/AC-29①③）",
         "createTask：预扣额度原子更新、单活跃任务、clientReqId 幂等（重复返回同一 taskId）、预检未过拒绝创建、metrics 服务端二次校验（含 `gender` ∈ male/female/unspecified，缺省/未传按 `unspecified`、非法值 E_PARAM）、越权 assetId 拒绝",
         "参考尺码（端上零推理）：服务端按 `metrics.gender` 输出 sizeResult——`male`→GB/T 1335.1、`female`→GB/T 1335.2、`unspecified`→中性六档兜底；含 rangeMin/rangeMax/standard/basis/disclaimer；三围全缺返回 sizeResult=null；固定数值预期区间表供 AC-16/AC-26 断言",
-        "任务状态机与 60s 超时：超时置 TIMEOUT 并幂等返还额度；供应商成功后下载结果转存云存储并更新 SUCCEEDED；供应商失败映射到内部错误码",
+        "任务状态机与 96s 超时（REQ v0.6）：`TASK_TIMEOUT_MS` 默认 **96000**（`lib/util.js`；保留 `SINN_TASK_TIMEOUT_MS` 环境变量覆写，经 `env-config.js` 的 `taskTimeoutMs`），任务创建后 >96s 未成功才置 TIMEOUT + failureCode 5002 并幂等返还额度一次（60–96s 继续返回 QUEUED/GENERATING，不得 60s 判超时）；供应商成功后下载结果转存云存储并更新 SUCCEEDED；供应商失败映射到内部错误码",
         "deleteTask：同一次云函数调用内物理删除云存储对象与任务/资产记录，响应 `deletedAt`（仅响应、不落库）；重复删除返回 404；不保留 tombstone/purgedAt 等墓碑字段（CP-08）",
         "素材级测试：用契约桩 fixture 驱动 AC-2/3/4/5/6/10/24 的服务端判定与「任务创建 0 次」路径",
         "L1 覆盖：状态迁移、幂等、退款一次、超时、越权按 404、错误码映射、供应商响应不可解析、三种 gender 的 sizeResult 与三围全缺降级",
@@ -97,12 +99,14 @@
       "writeScopes": ["miniprogram/pages/capture/", "miniprogram/pages/garment/", "miniprogram/services/upload.js", "miniprogram/services/precheck.js", "tests/unit/pages/capture/", "tests/unit/pages/garment/"],
       "acceptance": [
         "capture：人像 1–3 张，每项可单独重拍/修改；身高（100–250 整数）、体重（25–250，1 位小数）必填与校验；三围（40–200，1 位小数）选填与校验；性别选填（male/female/unspecified，默认 `unspecified`、可跳过不阻塞）；缺项/越界时「开始生成」禁用并提示具体缺失项（AC-1/AC-26）",
-        "端上 L0 预检：JPG/PNG、≤10MB、长边 1024–4096、长宽比、EXIF 方向；≤300ms 同步拦截，不上传不发网络",
+        "端上照片自动适配（BR-12/AC-27）：选图后 wx.getImageInfo → 两级压缩（长边 >4096px 或 >10MB 触发；第一级 ≤4096，压后仍 >10MB 再 ≤3072；保持 EXIF 方向、非 JPG 转 JPG；只上传压缩后 JPEG、原图不上传）；压缩中处理态（「开始生成」禁用）+「已自动压缩」提示（含压缩后长边/字节，不阻断，小图不提示）；<1024px 拒绝重拍不放大；压缩失败提示「照片处理失败，请重试或更换照片」且 uploadFile 调用 0 次；压缩耗时记录、不占 96s 轮询窗口（AC-27①–⑦）",
+        "供应商输入规格对齐（REQ v0.8 BR-14/AC-29）：`compressToVendorSpec(file)` 目标=长边 ≤4096px 且 ≤5MB 且 JPG；尺寸档 [4096,3072,2048,1024] 外层 × 质量档 [0.92,0.85,0.78,0.7,0.62,0.55,0.5] 内层，先降质量再降尺寸、达标即停；EXIF 先归一；提示区分「已自动压缩（超出上传限制）」与「已自动优化（供应商限制）」；全部档用尽仍不满足 → E_PHOTO_PROCESS_FAILED(5007)，不调用 uploadFile（spy=0）、任务创建 0 次、额度扣减 0 次；6MB/4000px 用例压到 ≤5MB 且 ≤4096px，小图（≤4096px 且 ≤5MB）不压缩不提示（AC-29①②④）",
+        "端上 L0 预检（对压缩后图）：JPG/PNG、≤10MB、长边 1024–4096、长宽比、EXIF 方向；≤300ms 同步拦截，不上传不发网络（压缩前超限由自动适配处理，L0 不得直接拒绝超长边原图）",
         "上传：wx.cloud.uploadFile + assetRegister；上传失败可重试且不产生重复资产、不扣额度",
         "服务端 precheck 接入：≤5s 出结果（目标，硬超时 8s）；三态 `pass|fail|unknown`，**unknown 不视为通过**（提示换照片/稍后重试），预检未过或 unknown 均不调用 createTask（AC-2/3/4/5；供应商无独立预检端点，SPIKE-0001 §6；火山引擎「图片换装 V2」是否有 validate 端点待 CP-04d 凭证实测确认；失败码映射见 SPEC §B.4）",
         "garment：单张上装；端上+服务端拦截吊牌/多件/模特上身/电商图，提示「仅接受自家衣服平铺/挂拍、单件完整展示」，任务创建 0 次（AC-24）",
         "capture→garment→generating 页面参数与返回路径按 SPEC A 节；所有隐私 API 调用前经 services/consent.js 校验；性别不写入本地缓存，仅随 createTask 提交",
-        "L1/L2 覆盖 AC-1/2/3/4/5/24/26（mock 预检 fixture），记录 AC-2 的 ≤5s 断言方式"
+        "L1/L2 覆盖 AC-1/2/3/4/5/24/26/27（mock 预检 fixture；AC-27 用固定大图/异常素材与 mock wx.compressImage），记录 AC-2 的 ≤5s 断言方式"
       ],
       "estimate": "2.5d"
     },
@@ -114,11 +118,11 @@
       "writeScopes": ["miniprogram/pages/generating/", "miniprogram/services/polling.js", "tests/unit/pages/generating/"],
       "acceptance": [
         "2s 轮询 taskGet（网络失败指数退避，最大 10s），页面展示服务端 stage 与已等待秒数（以 serverTime 计算），不造假百分比（AC-8）",
-        "60–65s 内进入明确超时态：显示原因与「重试」按钮，不出图、不持续转圈（AC-9）",
+        "超时与等待态（REQ v0.6，96s 预算）：2s 轮询；60s 内正常显示阶段与秒数；60–96s 继续等待并显示「生成较慢，请稍候」，**不得在 60s 判超时**；收到服务端 TIMEOUT 立即进超时态；端上 101s 硬上限兜底（96s+5s 缓冲，服务端异常/无终态响应）；超时态显示原因与「重试」按钮，不出图、不持续转圈（AC-9）；记录 `createTask` 成功返回时刻与结果页 `onload` 完成时刻（`createdAt`/`resultReadyAt`，仅内存/日志，不落 Storage；AC-7 计时埋点）",
         "失败分类六类文案与下一步动作（照片/衣服不合格、额度不足、内容安全、网络、服务不可用/排队超时、生成超时），失败页不展示任何结果图（AC-6/10）；失败映射引用 SPEC §B.4 火山错误码表（E_VENDOR_UNAVAILABLE/E_TIMEOUT/E_VENDOR_RESPONSE_INVALID/E_CONTENT_BLOCKED）",
         "离开页面再进入恢复同一任务：读 profile.activeTaskId / sinn_active_task_v1，任务 ID 相同、不重复创建、不重复扣额度（AC-12）",
         "用户取消 cancelTask → CANCELLED + 额度返还，回首页；成功 redirectTo result；任务被删除/清理后 taskGet 返回 404，页面转失败/超时提示，不出图",
-        "L2 覆盖 AC-6/8/9/10/12（可控时钟 + mock 服务端状态迁移）；AC-7 的真网络 e2e 由 QA-0001-02 执行，DEV 提供可复现步骤"
+        "L2 覆盖 AC-6/8/9/10/12（可控时钟 + mock 服务端状态迁移；AC-9 断言 60s 仍为生成中、96–101s 进入超时态、101s 硬上限兜底）；AC-7 的真网络 e2e 由 QA-0001-02 执行（计时边界 ≤96s、3/3），DEV 提供可复现步骤"
       ],
       "estimate": "2d"
     },
@@ -163,25 +167,26 @@
         "两条门禁原文写入 docs/dev/DEV-0001.md：check-gates.ps1 与 check-wxapp.ps1 均 FAIL=0",
         "包体积实测：主包 KB、页面数、无分包，回填 SPEC D 节预算表所需数据；证明未引入第三方运行库与未登记资源",
         "全链路自检（mock provider 或真实 provider）：首页→同意→人像采集（含性别选填）→衣服→生成→结果→删除本次/删除全部，记录每步结果与阻塞项",
-        "AC 自检表：AC-1..AC-26 逐条标注「已实现/部分/未实现」及证据位置（测试或脚本），交 QA-0001-01 比对；AC-20 标注物理全删断言方式、AC-26 标注三种 gender 证据",
+        "AC 自检表：AC-1..AC-28 逐条标注「已实现/部分/未实现」及证据位置（测试或脚本），交 QA-0001-01 比对；AC-20 标注物理全删断言方式、AC-26 标注三种 gender 证据、AC-27 标注端上两级压缩与提示/失败/EXIF/耗时记录证据（真机项见 CP-12）、AC-28 标注 mock `wx.getSkylineInfo` 缺失/不支持/支持三分支证据与兜底路径 spy 0 次断言（真机旧版仅用户侧设备，CP-12 标「部分可测」）、AC-7 标注计时边界（`createTask` 成功返回 → 结果页 `onload`）与 ≤96s 证据（真实网络 3/3 由 QA-0001-02 执行，依赖 CP-12/CP-04d）",
         "交接文档包含：改动路径清单、如何运行单测/门禁、云开发部署与定时触发器步骤、火山引擎开通与凭证注入步骤（`SINN_VOLC_AK`/`SINN_VOLC_SK`/`SINN_VOLC_REGION` 仅云函数环境变量，禁止进仓库/端上）、单次成本 ≤2 元/次与「Units/积分→元/次 换算待正式报价」说明、urlCheck/上传域名说明（本地不校验域名不得进提交版本）、遗留风险与阻塞项",
-        "若真实供应商/云开发未就绪（CP-04b/c/d、CP-02），明确标注 AC-7/14/15/20 的阻塞原因与解锁条件，不虚报通过"
+        "若真实供应商/云开发未就绪（CP-04b/c/d、CP-02），明确标注 AC-7（96s 真网络 3/3）/14/15/20 的阻塞原因与解锁条件，不虚报通过；AC-7 不得用 mock 结果代替真实验收"
       ],
       "estimate": "1d"
     },
     {
       "id": "QA-0001-01",
       "role": "qa",
-      "title": "TC-0001 测试用例设计（AC-1..AC-26 全量映射）",
+      "title": "TC-0001 测试用例设计（AC-1..AC-28 全量映射）",
       "dependsOn": ["DEV-0001-01"],
       "writeScopes": ["docs/qa/TC-0001.md"],
       "acceptance": [
-        "AC-1..AC-26 每条至少 1 条用例，编号 TC-0001-L{1|2|3|4}-{seq}，每条注明对应 AC、功能点 F-x、验证层（L1/L2/L3/人工/门禁）、前置与预期",
-        "固定素材清单与判定标准：全身/半身/遮挡/多人/逆光/吊牌/多件/模特上身/电商图/3 组结果样张（1x/3x 裁切对比）；另备 AC-26 同一组数值的三 gender（male/female/unspecified）预期区间表；素材路径与 SHA 记录，供后续迭代复用",
+        "AC-1..AC-28 每条至少 1 条用例，编号 TC-0001-L{1|2|3|4}-{seq}，每条注明对应 AC、功能点 F-x、验证层（L1/L2/L3/人工/门禁）、前置与预期",
+        "AC-7 计时用例（REQ v0.6）：以 `createTask` 成功返回为起点、结果页 `onload` 完成为终点断言 ≤96s（真网络 3/3）；同时断言 60s 时仍为生成中、60–96s 显示「生成较慢，请稍候」且不判超时；AC-9 用可控时钟断言 96–101s 进入超时态",
+        "固定素材清单与判定标准：全身/半身/遮挡/多人/逆光/吊牌/多件/模特上身/电商图/3 组结果样张（1x/3x 裁切对比）；另备 AC-26 同一组数值的三 gender（male/female/unspecified）预期区间表；再备 AC-27 固定素材（长边 8000px 人像、「4096 压后仍 >10MB」构造、长边 800px、EXIF orientation=6 竖拍、2048px/2MB 小图、mock 压缩解码/编码抛错）与 ①–⑦ 预期；再备 AC-28 固定素材（mock `wx.getSkylineInfo` 缺失/返回不支持/返回支持三态与 spy 断言预期）；素材路径与 SHA 记录，供后续迭代复用",
         "AC-13/14/15 用例依据 SPIKE-0001 结论定稿（S1/S2 方案、2048/1536 分支）；SPIKE 未出结论前不得假设通过",
         "AC-16 与 AC-26 尺码断言必须分开登记（双表标准名 + 中性兜底），不得把尺码断言挂到 AC-14；AC-20 按物理全删口径（deletedAt、查询 404、对象 HEAD 404、auditTask exists=false）登记",
         "每条用例标注「自动化/人工视觉/门禁/阻塞条件」；缺开发者工具、缺供应商、缺云开发环境时写明阻塞与解锁条件",
-        "输出 AC→TC 覆盖矩阵，确认 26 条 AC 无遗漏、无重复承载"
+        "输出 AC→TC 覆盖矩阵，确认 28 条 AC 无遗漏、无重复承载"
       ],
       "estimate": "1.5d"
     },
@@ -192,8 +197,9 @@
       "dependsOn": ["QA-0001-01", "DEV-0001-10"],
       "writeScopes": ["tests/e2e/"],
       "acceptance": [
-        "e2e 覆盖可自动化部分：AC-7（若真实网络可用）、AC-8/9（可控时钟或 mock）、AC-12、AC-19、AC-20（deletedAt + 查询 404 + 对象 HEAD 404 + auditTask exists=false）、AC-21（chooseMedia spy）、AC-23、AC-25",
-        "用 mock provider 契约桩驱动 AC-2/3/4/5/6/10/24，不依赖真实 API 采购",
+        "e2e 覆盖可自动化部分：AC-7（若真实网络可用；计时边界=`createTask` 成功返回 → 结果页 `onload` 完成 ≤96s、3/3；60s 仍为生成中、60–96s 显示「生成较慢，请稍候」且不判超时）、AC-8/9（可控时钟或 mock；AC-9 断言 96–101s 进入超时态 + 60s 仍为生成中）、AC-12、AC-19、AC-20（deletedAt + 查询 404 + 对象 HEAD 404 + auditTask exists=false）、AC-21（chooseMedia spy）、AC-23、AC-25、AC-27（8000px 自动压缩成功路径，mock wx.getImageInfo/wx.compressImage 驱动；真机性能与 EXIF 另记 CP-12）、AC-28（mock 驱动启动兜底：低版本不初始化业务/原生弹窗文案含「8.0.30 及以上」/确认后 `wx.exitMiniProgram` 调用/正常版本不触发；真机旧版仅用户侧设备，CP-12 标「部分可测」）",
+        "用 mock provider 契约桩驱动 AC-2/3/4/5/6/10/24；AC-27 用 mock wx.compressImage/wx.getImageInfo 驱动 ①–⑦（真机性能与 EXIF 另记 CP-12），不依赖真实 API 采购",
+        "AC-29（REQ v0.8）e2e 用例：6MB/4000px 素材 → mock 压缩后 ≤5MB 且长边 ≤4096px、出现「已自动优化照片（供应商限制）」提示、createTask 成功 1 次；mock「最低质量仍 >5MB」→ 逐档降尺寸直到同时满足 ≤5MB 与 ≤4096px（断言上传字节/长边）；压缩失败或最小档仍超 → uploadFile 调用 0 次、createTask 0 次、额度扣减 0 次、文案明确；小图（2048px/2MB）不压缩不提示；真机压缩内存/耗时见 CP-12",
         "开发者工具环境缺失时，相关用例标「阻塞」并写明原因与解锁条件，不得标「通过」（AGENTS.md 小程序专项门禁 §4）",
         "测试数据与固定素材不写入 miniprogram 包；e2e 产物与日志可复现",
         "脚本运行说明写入模块 README 或 docblock，QA-0001-03 可一键复跑"
@@ -203,13 +209,16 @@
     {
       "id": "QA-0001-03",
       "role": "qa",
-      "title": "测试执行与 REPORT-0001（含 AC-26 与人工视觉 AC-14/15）",
+      "title": "测试执行与 REPORT-0001（含 AC-26/AC-27 与人工视觉 AC-14/15）",
       "dependsOn": ["QA-0001-02"],
       "writeScopes": ["docs/qa/REPORT-0001.md"],
       "acceptance": [
-        "用例执行率 100%；AC-1..AC-26 每条给结论「通过/失败/阻塞」，阻塞项附原因与解锁条件",
+        "用例执行率 100%；AC-1..AC-28 每条给结论「通过/失败/阻塞」，阻塞项附原因与解锁条件",
         "AC-14/15 人工视觉按固定样张 3/3 判定并留记录（执行人、日期、样张哈希、判定截图）；判定标准引用 TC-0001",
         "AC-16/AC-26 参考尺码证据：三种 gender 的区间、对应标准名（GB/T 1335.1/1335.2/中性映射）、固定免责文案与禁词正则结果均留记录",
+        "AC-27 证据：压缩前后长边/字节、压缩提示文案、压缩失败与 <1024px 拒绝时 uploadFile/任务创建均为 0 次的日志或 spy；真机压缩内存/耗时/EXIF 结论另记 CP-12",
+        "AC-7 证据（REQ v0.6）：`createTask` 成功返回时间戳与结果页 `onload` 完成时间戳、`resultReadyAt-createdAt ≤96000ms`、真网络 3/3 记录；60s 时仍为生成中、60–96s 提示「生成较慢，请稍候」且未判超时；真机/真实供应商未就绪时标「阻塞」（CP-12/CP-04d），不得标通过",
+        "AC-28 证据：mock 启动兜底分支（`wx.getSkylineInfo` 缺失/不支持）下云函数/Storage/上传/隐私 API spy 均 0 次、原生 `wx.showModal` 文案与 `wx.exitMiniProgram` 调用记录、正常版本不触发兜底；真机旧版未取得时标「部分可测/阻塞」",
         "失败项均有缺陷单（编号、复现步骤、期望/实际、影响 AC），不得只写「失败」",
         "AC-22 门禁证据：check-wxapp.ps1 原文（FAIL=0）、包体积数字；AC-20 接口/存储断言截图或日志（物理全删、无墓碑）",
         "报告给出明确结论（通过/有条件通过/不通过）；未闭合人工卡点必须列出，不得掩盖"
@@ -224,7 +233,7 @@
       "writeScopes": ["docs/qa/RELEASE-CHECKLIST.md"],
       "acceptance": [
         "RELEASE-CHECKLIST 逐项勾选或标注阻塞（含人工卡点 CP-01..CP-13 状态：已闭合的写裁定依据，未闭合的写阻塞影响）",
-        "复核 QA-0001-01 覆盖矩阵：AC-1..AC-26 均有用例且结论已回填，无「未覆盖」",
+        "复核 QA-0001-01 覆盖矩阵：AC-1..AC-28 均有用例且结论已回填，无「未覆盖」",
         "复核 AC-22 门禁 PASS 证据与 AC-14/15 人工视觉签署记录",
         "未闭合项列明并说明对 REPORT 结论的影响；不得代签发布/提审"
       ],
