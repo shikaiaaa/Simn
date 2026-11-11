@@ -11,7 +11,8 @@
  *
  * 运行前提（2026-11-10 起）：开发者工具以 automator connect 模式接入（SINN_E2E_WS），
  * 真实云环境 AppID wx735e60c2c07673aa / env simn-01-d5gjsxm0ocb78add8 已可用。
- * MAT-* 固定素材尚未提供，依赖素材的用例仍按阻塞登记；L3-002 使用 tests/fixtures/_smoke
+ * MAT-01..MAT-09 固定素材已于 2026-11-11 固化到 tests/fixtures/mat/（见 docs/qa/MATERIALS-0001.md），
+ * MAT-10..MAT-15 仍无文件、依赖它们的用例继续按阻塞登记；L3-002 使用 tests/fixtures/_smoke
  * 合成冒烟图（明确非 MAT 固定样张），仅验证真实云额度与拦截链路，不得替代视觉/画质验收。
  */
 
@@ -20,17 +21,18 @@ const fs = require('fs');
 const crypto = require('crypto');
 const h = require('./harness');
 
-/** TC-0001 §5 固定素材（路径相对 tests/fixtures/；SHA 待素材到位后回填）。 */
+/** TC-0001 §5 固定素材（路径相对 tests/fixtures/；MAT-01..MAT-09 已固化，SHA 见 MATERIALS-0001.md）。 */
 const MAT = {
-  'MAT-01': 'person/full-body-front-01.jpg',
-  'MAT-02': 'person/half-body-01.jpg',
-  'MAT-03': 'person/face-occluded-01.jpg',
-  'MAT-04': 'person/body-occluded-01.jpg',
-  'MAT-05': 'person/multi-person-01.jpg',
-  'MAT-06': 'person/backlight-01.jpg',
-  'MAT-07': 'person/under-exposed-01.jpg',
-  'MAT-08': 'garment/garment-flat-01.jpg',
-  'MAT-09': 'garment/tag-closeup-01.jpg',
+  'MAT-01': 'mat/mat-01-woman-fullbody.jpg',
+  'MAT-02': 'mat/mat-02-man-fullbody.jpg',
+  'MAT-03': 'mat/mat-03-woman-fullbody.jpg',
+  'MAT-04': 'mat/mat-04-man-backside.jpg',
+  'MAT-05': 'mat/mat-05-face-only.jpg',
+  'MAT-06': 'mat/mat-06-lowres.jpg',
+  'MAT-07': 'mat/mat-07-blur.jpg',
+  'MAT-08': 'mat/mat-08-garment-flat.jpg',
+  'MAT-09': 'mat/mat-09-two-persons.jpg',
+  // MAT-10..MAT-15 暂无对应文件（未提供，依赖用例仍按阻塞）；路径保留 v0.1 规划值，勿当作已提供。
   'MAT-10': 'garment/multi-garment-01.jpg',
   'MAT-11': 'garment/on-model-01.jpg',
   'MAT-12': 'garment/ecommerce-01.jpg',
@@ -130,6 +132,28 @@ async function readQuota(mp) {
   const badge = await h.text(page, '.vip-badge');
   const match = /剩余\s*(\d+)\s*\/\s*(\d+)\s*次/.exec(quotaText || '');
   return { quotaText, badgeText: badge, remaining: match ? Number(match[1]) : null, limit: match ? Number(match[2]) : null };
+}
+
+/**
+ * 直接调云函数读取额度（服务端权威值），用于「生成中/页面切换中」的用例。
+ * 原因：connect 模式下生成页轮询期间，automator 的页面查询/导航偶发 10s 协议超时（T-6），
+ * 而 readQuota() 需要 goIndex→我的→profile 多次页面操作，在生成中窗口内容易被超时打断。
+ * L3-003 只断言 used 增量（AC-12），不依赖 UI 文案，故用云函数口径更稳定。
+ */
+async function readQuotaCloud(mp) {
+  const res = await h.cloudCall(mp, 'sinn-account', { action: 'profile' });
+  if (!res || !res.ok) throw new Error('[assert] profile 云函数调用失败：' + ((res && res.error) || '未知错误'));
+  const envelope = res.result || {};
+  if (!envelope.ok) throw new Error('[assert] profile 返回失败：' + JSON.stringify(envelope.error || null));
+  const quota = envelope.data && envelope.data.quota;
+  if (!quota) throw new Error('[assert] profile 返回缺少 data.quota');
+  return {
+    source: 'cloud-profile',
+    used: quota.used,
+    limit: quota.limit,
+    remaining: quota.remaining,
+    dayKey: quota.dayKey,
+  };
 }
 
 /** 读任务详情（云函数 taskGet），统一返回 result 对象。 */
@@ -352,22 +376,45 @@ const CASES = [
     async run(ctx) {
       const { mp } = ctx;
       // 先记录生成前的额度
-      const quotaBefore = await readQuota(mp);
+      const quotaBefore = await readQuotaCloud(mp);
       const taskId = await (async () => {
         const capture = await h.enterCapture(mp);
         await h.fillMetrics(capture, { heightCm: 175, weightKg: 70, gender: 'male', chestCm: 92, waistCm: 78, hipCm: 96 });
-        await h.mockChooseMedia(mp, matFiles(['MAT-01']));
+        await h.mockChooseMediaFromDisk(mp, matFiles(['MAT-01']));
         await h.addPersonPhotos(capture, 1);
         await h.tap(capture, '.btn-primary');
         const garment = await h.waitRoute(mp, '/pages/garment/garment');
-        await h.mockChooseMedia(mp, matFiles(['MAT-08']));
+        await h.mockChooseMediaFromDisk(mp, matFiles(['MAT-08']));
         await h.addGarmentPhoto(garment);
         await h.tapStart(garment);
         const generating = await h.waitRoute(mp, '/pages/generating/generating', 15000);
-        await h.waitFor(async () => h.getStorage(mp, 'sinn_active_task_v1'), 10000, 250, 'active task 缓存');
-        return (await h.getStorage(mp, 'sinn_active_task_v1')).taskId;
+        // 生成页首轮轮询会触发 setData/云调用，先让页面稳定，再读缓存（T-6：生成期间自动化调用偶发 10s 超时）。
+        await h.sleep(1500);
+        let activeCache = null;
+        for (let i = 0; i < 20; i += 1) {
+          try {
+            activeCache = await h.getStorage(mp, 'sinn_active_task_v1');
+            if (activeCache && activeCache.taskId) break;
+          } catch (e) {
+            /* automator 偶发 10s 超时：重试读取，不改变用例语义 */
+          }
+          await h.sleep(500);
+        }
+        if (!activeCache || !activeCache.taskId) throw new Error('[assert] 未读到 sinn_active_task_v1.taskId');
+        return activeCache.taskId;
       })();
-      const index = await h.goIndex(mp);
+      // reLaunch 在页面切换/轮询期间可能偶发 10s 协议超时（T-6）；重试 3 次，仍失败则抛错。
+      let index = null;
+      let lastNavErr = null;
+      for (let attempt = 1; attempt <= 3 && !index; attempt += 1) {
+        try {
+          index = await h.goIndex(mp);
+        } catch (e) {
+          lastNavErr = e;
+          await h.sleep(2000);
+        }
+      }
+      if (!index) throw lastNavErr || new Error('[nav] 重试 3 次仍无法回到首页');
       await h.sleep(600);
       const resumeButton = await (async () => {
         const buttons = await index.$$('button');
@@ -388,7 +435,7 @@ const CASES = [
         }
       })();
       const cached = await h.getStorage(mp, 'sinn_active_task_v1');
-      const quotaAfter = await readQuota(mp);
+      const quotaAfter = await readQuotaCloud(mp);
       const evidence = {
         taskId,
         resumedTaskId: cached && cached.taskId,
@@ -985,7 +1032,7 @@ const CASES = [
       for (const item of personExpectations) {
         const capture = await h.enterCapture(mp);
         await h.fillMetrics(capture, { heightCm: 175, weightKg: 70, gender: 'male', chestCm: 92, waistCm: 78, hipCm: 96 });
-        await h.mockChooseMedia(mp, matFiles([item.mat]));
+        await h.mockChooseMediaFromDisk(mp, matFiles([item.mat]));
         const t0 = Date.now();
         await h.addPersonPhotos(capture, 1);
         const hint = await h.waitFor(
@@ -1008,7 +1055,7 @@ const CASES = [
       const garmentResults = [];
       for (const item of garmentExpectations) {
         const capture = await h.enterCapture(mp);
-        await h.mockChooseMedia(mp, matFiles(['MAT-01']));
+        await h.mockChooseMediaFromDisk(mp, matFiles(['MAT-01']));
         await h.addPersonPhotos(capture, 1);
         await h.waitFor(
           async () => {
@@ -1021,7 +1068,7 @@ const CASES = [
         );
         await h.tap(capture, '.btn-primary');
         const garment = await h.waitRoute(mp, '/pages/garment/garment');
-        await h.mockChooseMedia(mp, matFiles([item.mat]));
+        await h.mockChooseMediaFromDisk(mp, matFiles([item.mat]));
         await h.addGarmentPhoto(garment);
         const hint = await h.waitFor(
           async () => {

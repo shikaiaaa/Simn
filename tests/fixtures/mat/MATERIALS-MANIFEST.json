@@ -1,0 +1,74 @@
+{
+  "note": "本文件只登记测试素材来源、许可与合成体型数据；图片二进制按 .gitignore 排除，不入库（Pexels License 不含作为素材再分发）。",
+  "fetchedAt": "2026-11-11",
+  "fetchedBy": "Lead",
+  "purpose": "P1 demo 的 L3 用例素材（MAT）。人物体型数据全部为测试用合成值，与图片中真实人物无关。",
+  "items": [
+    {
+      "matId": "MAT-01",
+      "file": "tests/fixtures/mat/mat-01-woman-fullbody.jpg",
+      "sourcePage": "https://www.pexels.com/photo/16454901/",
+      "directUrl": "https://images.pexels.com/photos/16454901/pexels-photo-16454901.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "license": "Pexels License",
+      "width": 1600,
+      "height": 2545,
+      "bytes": 524732,
+      "usage": "合格人像：女性、正面、全身（头到脚）",
+      "syntheticBody": { "gender": "female", "heightCm": 165, "weightKg": 52.0, "chestCm": 84.0, "waistCm": 66.0, "hipCm": 90.0 }
+    },
+    {
+      "matId": "MAT-02",
+      "file": "tests/fixtures/mat/mat-02-man-fullbody.jpg",
+      "sourcePage": "https://www.pexels.com/photo/13287851/",
+      "directUrl": "https://images.pexels.com/photos/13287851/pexels-photo-13287851.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "license": "Pexels License",
+      "width": 1600,
+      "height": 2400,
+      "bytes": 287988,
+      "usage": "合格人像：男性、正面、全身（头到脚）",
+      "syntheticBody": { "gender": "male", "heightCm": 178, "weightKg": 70.0, "chestCm": 96.0, "waistCm": 80.0, "hipCm": 96.0 }
+    },
+    {
+      "matId": "MAT-03",
+      "file": "tests/fixtures/mat/mat-03-woman-fullbody.jpg",
+      "sourcePage": "https://www.pexels.com/photo/5762357/",
+      "directUrl": "https://images.pexels.com/photos/5762357/pexels-photo-5762357.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "license": "Pexels License",
+      "width": 1600,
+      "height": 2400,
+      "bytes": 341896,
+      "usage": "合格人像：女性、正面、全身（头到脚，街拍）",
+      "syntheticBody": { "gender": "female", "heightCm": 168, "weightKg": 55.0, "chestCm": 86.0, "waistCm": 68.0, "hipCm": 92.0 }
+    },
+    {
+      "matId": "MAT-04",
+      "file": "tests/fixtures/mat/mat-04-man-backside.jpg",
+      "sourcePage": "https://www.pexels.com/photo/37893267/",
+      "directUrl": "https://images.pexels.com/photos/37893267/pexels-photo-37893267.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "license": "Pexels License",
+      "width": 1600,
+      "height": 2499,
+      "bytes": 366574,
+      "usage": "负例参考：全身但背面、且为黑白；L0 不拦截，真实视觉预检阶段应判不合格（当前 mock 预检恒 pass，仅作素材留存）",
+      "syntheticBody": { "gender": "male", "heightCm": 172, "weightKg": 66.0, "chestCm": 92.0, "waistCm": 78.0, "hipCm": 94.0 }
+    },
+    {
+      "matId": "MAT-08",
+      "file": "tests/fixtures/mat/mat-08-garment-flat.jpg",
+      "sourcePage": "https://www.pexels.com/photo/6046231/",
+      "directUrl": "https://images.pexels.com/photos/6046231/pexels-photo-6046231.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "license": "Pexels License",
+      "width": 1600,
+      "height": 2416,
+      "bytes": 212289,
+      "sha256": "DED3E3C57EB354ABC3363652FF75381363FC62E02A87938E84550CA023F89596",
+      "usage": "合格衣服平铺照：单件上装（米色短袖 T 恤），纯色背景、无模特、无遮挡；L3-003 / L3-004 等需要「人像 + 衣服」两条素材的用例使用"
+    }
+  ],
+  "derivedNegativePlan": [
+    "MAT-05 面部特写（从 MAT-01 裁切，非全身）",
+    "MAT-06 低分辨率（从 MAT-02 缩到长边 400px，低于 L0 下限 1024）",
+    "MAT-07 模糊（MAT-03 高斯模糊，视觉预检阶段应判不合格）",
+    "MAT-09 双人物拼图（MAT-01 + MAT-02 并排，多人照；原计划编号 MAT-08，因 MAT-08 改为衣服平铺素材而顺延）"
+  ]
+}
