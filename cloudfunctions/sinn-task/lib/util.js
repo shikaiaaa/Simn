@@ -11,10 +11,14 @@ var errors = require('./errors')
 var HOUR_MS = 60 * 60 * 1000
 var DAY_MS = 24 * HOUR_MS
 var PURGE_TTL_MS = 23 * HOUR_MS // SPEC §4：purgeAt = 创建时间 + 23h（预留 1h 余量）
-var TASK_TIMEOUT_MS = 60 * 1000 // SPEC §2：60s 未成功判 TIMEOUT
+var TASK_TIMEOUT_MS = 96 * 1000 // SPEC v0.9 §2：96s 未成功判 TIMEOUT（AC-7）
 var PRECHECK_CACHE_MS = 10 * 60 * 1000 // API-6：同 assetId 10min 缓存
 var MAX_PHOTO_BYTES = 10 * 1024 * 1024
 var MAX_LONG_SIDE = 4096
+// SPEC v0.11 §B.2：供应商输入规格（JPG、<=5MB、长边 <=4096）。
+var VENDOR_MAX_BYTES = 5 * 1024 * 1024
+var VENDOR_MAX_LONG_SIDE = 4096
+var VENDOR_MIME = 'image/jpeg'
 
 var GENDERS = ['male', 'female', 'unspecified']
 
@@ -232,6 +236,9 @@ module.exports = {
   PRECHECK_CACHE_MS: PRECHECK_CACHE_MS,
   MAX_PHOTO_BYTES: MAX_PHOTO_BYTES,
   MAX_LONG_SIDE: MAX_LONG_SIDE,
+  VENDOR_MAX_BYTES: VENDOR_MAX_BYTES,
+  VENDOR_MAX_LONG_SIDE: VENDOR_MAX_LONG_SIDE,
+  VENDOR_MIME: VENDOR_MIME,
   GENDERS: GENDERS,
   randomHex: randomHex,
   newTaskId: newTaskId,

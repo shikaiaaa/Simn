@@ -13,6 +13,11 @@
   color: #5a626d;
   margin-bottom: 24rpx;
 }
+.generating-slow {
+  font-size: 28rpx;
+  color: #5a626d;
+  margin-bottom: 16rpx;
+}
 .generating-tip {
   margin-bottom: 24rpx;
 }

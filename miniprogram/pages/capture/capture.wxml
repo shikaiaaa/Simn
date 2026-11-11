@@ -22,6 +22,8 @@
         </view>
       </view>
       <view class="hint" wx:if="{{errorText}}">{{errorText}}</view>
+      <view class="hint" wx:if="{{processing}}">照片处理中…</view>
+      <view class="hint hint-ok" wx:if="{{compressionNote}}">{{compressionNote}}</view>
       <view class="hint hint-ok" wx:if="{{precheckNote}}">{{precheckNote}}</view>
     </view>
 
@@ -67,8 +69,8 @@
       <view wx:for="{{formErrors}}" wx:key="message" class="form-error">{{item.message}}</view>
     </view>
 
-    <button class="btn btn-primary" disabled="{{!canSubmit || submitting}}" bindtap="onNext">
-      {{submitting ? '处理中…' : '下一步'}}
+    <button class="btn btn-primary" disabled="{{!canSubmit || submitting || processing}}" bindtap="onNext">
+      {{processing ? '照片处理中…' : (submitting ? '处理中…' : '下一步')}}
     </button>
     <view class="disclaimer">照片仅用于本次试穿生成，任务数据 23 小时内自动删除。</view>
   </view>

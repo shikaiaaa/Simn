@@ -4,6 +4,7 @@
 // 拒绝：不写本地、不调用任何隐私接口，reLaunch 回首页只保留功能说明。
 const api = require('../../services/api')
 const consent = require('../../services/consent')
+const clientCompat = require('../../utils/client-compat')
 
 Page({
   data: {
@@ -23,6 +24,8 @@ Page({
   },
 
   onLoad() {
+    // 低版本微信兜底（AC-28）：App.onLaunch 已提示升级，这里不进入业务/不调隐私接口。
+    if (clientCompat.isClientTooOld()) return
     this._wx = wx
     // 与 wx.requirePrivacyAuthorize 合并：平台隐私请求时回到同意流程。
     this._privacyHandler = consent.installPrivacyHandler(wx, {

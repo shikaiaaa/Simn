@@ -1,5 +1,5 @@
 <!--index.wxml-->
-<view class="screen">
+<view class="screen" wx:if="{{!clientBlocked}}">
 <navigation-bar title="Sinn" back="{{false}}" color="black" background="#f7f7f8"></navigation-bar>
 <scroll-view class="page page-scroll" scroll-y type="list">
   <view class="page-body">

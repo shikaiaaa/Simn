@@ -24,10 +24,12 @@
       </view>
 
       <view class="hint" wx:if="{{errorText}}">{{errorText}}</view>
+      <view class="hint" wx:if="{{processing}}">照片处理中…</view>
+      <view class="hint hint-ok" wx:if="{{compressionNote}}">{{compressionNote}}</view>
     </view>
 
-    <button class="btn btn-primary" disabled="{{!canSubmit || submitting}}" bindtap="onStart">
-      {{submitting ? '处理中…' : '开始生成'}}
+    <button class="btn btn-primary" disabled="{{!canSubmit || submitting || processing}}" bindtap="onStart">
+      {{processing ? '照片处理中…' : (submitting ? '处理中…' : '开始生成')}}
     </button>
     <view class="disclaimer">生成前会先做照片预检；预检不通过不会创建任务、不扣额度。</view>
   </view>

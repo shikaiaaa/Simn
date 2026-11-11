@@ -19,6 +19,9 @@ var precheckLib = require('./precheck')
 var ACTIONS = ['assetRegister', 'precheck', 'createTask', 'taskGet', 'cancelTask', 'deleteTask', 'auditTask']
 var IN_PROGRESS = ['QUEUED', 'GENERATING', 'SAVING']
 var TERMINAL = ['SUCCEEDED', 'FAILED', 'TIMEOUT', 'CANCELLED']
+// 服务端兜底（SPEC v0.8 §B.2）：客户端应已自动压缩到 1024–4096；
+// 若资产尺寸仍越界（例如旧客户端/异常上传），precheck 直接返回 3014。
+var MIN_PRECHECK_LONG_SIDE = 1024
 
 var STAGE_OF_STATUS = {
   QUEUED: 'QUEUED',
@@ -33,11 +36,56 @@ var STAGE_OF_STATUS = {
 /** 供应商失败码 → 内部错误码（SPEC §B.4 映射表）。 */
 var VENDOR_FAILURE_MAP = {
   content_blocked: 4001,
-  error_apply_region_not_detected: 3002
+  error_apply_region_not_detected: 3002,
+  precheck_vendor_limit: 3015
 }
+
+var VENDOR_LIMIT_HINT = '照片超出供应商规格（≤5MB、长边 ≤4096），请重新选择或由端上压缩后重试'
 
 function mapVendorFailure(code) {
   return VENDOR_FAILURE_MAP[code] || 5001
+}
+
+/** SPEC v0.11 §B.2：登记/提交前校验资产是否满足供应商输入规格，不满足抛 3015。 */
+function assertVendorSpecAsset(asset) {
+  asset = asset || {}
+  var bytes = Number(asset.bytes) || 0
+  var longSide = Math.max(Number(asset.width) || 0, Number(asset.height) || 0)
+  var mime = typeof asset.mime === 'string' ? asset.mime : ''
+  if (bytes > util.VENDOR_MAX_BYTES || longSide > util.VENDOR_MAX_LONG_SIDE || mime !== util.VENDOR_MIME) {
+    throw errors.fail(3015, { hint: VENDOR_LIMIT_HINT })
+  }
+}
+
+/**
+ * SPEC v0.11 §B.2：assetRegister 的参数在进入通用参数校验（1001）之前，先按供应商
+ * 输入规格粗判，保证「超供应商规格」统一返回 3015，而不是被既有长边/体积校验抢先拦截。
+ * 仅在 payload 显式给出有效数值/字符串时判断，保持缺字段仍由 validateAssetPayload → 1001。
+ */
+function assertVendorSpecPayload(payload) {
+  payload = payload || {}
+  var bytes = Number(payload.bytes)
+  var width = Number(payload.width)
+  var height = Number(payload.height)
+  var mime = typeof payload.mime === 'string' ? payload.mime : ''
+  var hasBytes = isFinite(bytes) && bytes > 0
+  var hasDims = isFinite(width) && width > 0 && isFinite(height) && height > 0
+  if (hasBytes && bytes > util.VENDOR_MAX_BYTES) throw errors.fail(3015, { hint: VENDOR_LIMIT_HINT })
+  if (hasDims && Math.max(width, height) > util.VENDOR_MAX_LONG_SIDE) {
+    throw errors.fail(3015, { hint: VENDOR_LIMIT_HINT })
+  }
+  if (mime && mime !== util.VENDOR_MIME) throw errors.fail(3015, { hint: VENDOR_LIMIT_HINT })
+}
+
+/** 从 AppError.detail 中安全提取 vendorCode/httpStatus（脱敏，仅用于 failure 持久化）。 */
+function vendorDetailOf(error) {
+  var detail = (error && error.detail) || {}
+  var vendorCode = detail.vendorCode
+  var httpStatus = detail.httpStatus !== undefined ? detail.httpStatus : error && error.httpStatus
+  return {
+    vendorCode: vendorCode === undefined || vendorCode === null ? null : String(vendorCode),
+    httpStatus: typeof httpStatus === 'number' ? httpStatus : null
+  }
 }
 
 function withTimeout(promise, timeoutMs, code, hint) {
@@ -155,15 +203,27 @@ function createHandler(deps) {
   async function failTask(task, code, extra) {
     var meta = errors.getMeta(code)
     var status = code === 5002 ? 'TIMEOUT' : 'FAILED'
+    var vendorDetail = vendorDetailOf(extra && extra.cause)
+    var failure = {
+      code: code,
+      name: meta.name,
+      hint: (extra && extra.hint) || (code === 3015 ? VENDOR_LIMIT_HINT : ''),
+      vendorCode: vendorDetail.vendorCode,
+      httpStatus: vendorDetail.httpStatus,
+      at: now()
+    }
+    if (extra && extra.failure) {
+      Object.assign(failure, extra.failure)
+    }
     var patch = {
       status: status,
       stage: status,
       failureCode: code,
       failureName: meta.name,
       failureMessage: meta.message,
+      failure: failure,
       statusUpdatedAt: now()
     }
-    Object.assign(patch, extra || {})
     if (!task.quotaRefunded) {
       patch.quotaRefunded = true
     }
@@ -216,7 +276,8 @@ function createHandler(deps) {
       resultHeight: height,
       failureCode: null,
       failureName: null,
-      failureMessage: null
+      failureMessage: null,
+      failure: null
     })
     if (updated.vendorTaskId && vendor && typeof vendor.erase === 'function') {
       try {
@@ -264,6 +325,13 @@ function createHandler(deps) {
         message: task.failureMessage || meta.message,
         hint: meta.message
       }
+      // SPEC v0.11 §B.4：透出脱敏后的供应商错误码/状态，便于客户端与排障区分参数类错误。
+      if (task.failure && task.failure.vendorCode !== undefined && task.failure.vendorCode !== null) {
+        view.failure.vendorCode = task.failure.vendorCode
+      }
+      if (task.failure && typeof task.failure.httpStatus === 'number') {
+        view.failure.httpStatus = task.failure.httpStatus
+      }
     }
     return view
   }
@@ -285,7 +353,11 @@ function createHandler(deps) {
   async function assetRegister(payload, ctx) {
     await assertConsent(ctx.openid)
     util.assertClientReqId(payload.clientReqId)
+    // SPEC v0.11 §B.2：登记即拒不合规资产（不登记、不预检、不提交供应商）。
+    // 先按原始 payload 做供应商规格粗判（超规格 → 3015，而非 1001），再走通用参数校验。
+    assertVendorSpecPayload(payload)
     var normalized = util.validateAssetPayload(payload)
+    assertVendorSpecAsset(normalized)
 
     var existing = await store.findAssetByClientReqId(ctx.openid, payload.clientReqId)
     if (existing) {
@@ -335,6 +407,26 @@ function createHandler(deps) {
 
     if (asset.precheck && asset.precheck.at && now() - asset.precheck.at < util.PRECHECK_CACHE_MS) {
       return precheckPublic(asset.precheck, true)
+    }
+
+    // 服务端兜底（SPEC v0.8 F-17 / 3014）：长边 <1024 或 >4096 的资产不进入供应商预检。
+    var assetLongSide = Math.max(Number(asset.width) || 0, Number(asset.height) || 0)
+    if (assetLongSide > 0 && (assetLongSide < MIN_PRECHECK_LONG_SIDE || assetLongSide > util.MAX_LONG_SIDE)) {
+      var sizeRecord = {
+        pass: false,
+        status: 'fail',
+        code: 3014,
+        name: 'E_PRECHECK_TOO_SMALL',
+        message: errors.getMeta(3014).message,
+        hint:
+          assetLongSide < MIN_PRECHECK_LONG_SIDE
+            ? '照片分辨率过低，请重新拍摄（长边至少 1024 像素）'
+            : '压缩后照片仍超过 4096 像素，请更换照片',
+        checks: [],
+        at: now()
+      }
+      await store.updateAsset(asset.assetId, { precheck: sizeRecord })
+      return precheckPublic(sizeRecord, false)
     }
 
     var buffer
@@ -406,8 +498,13 @@ function createHandler(deps) {
     }
     var garmentAsset = await loadOwnedAsset(ctx.openid, payload.garmentAssetId, 'GARMENT')
 
-    // 预检必须为 pass；unknown/fail 均拒绝创建且不扣额度
+    // SPEC v0.11 §B.2：提交前再校验供应商规格，不合规不建任务、不扣额度、不提交供应商。
     var allAssets = personAssets.concat([garmentAsset])
+    allAssets.forEach(function (asset) {
+      assertVendorSpecAsset(asset)
+    })
+
+    // 预检必须为 pass；unknown/fail 均拒绝创建且不扣额度
     allAssets.forEach(function (asset) {
       var status = asset.precheck && asset.precheck.status
       if (status !== 'pass') {
@@ -499,9 +596,10 @@ function createHandler(deps) {
       }
     } catch (createError) {
       // 供应商提交失败/内部异常：任务置 FAILED、额度幂等返还，然后把错误抛给客户端
+      var appError = createError && createError.isAppError ? createError : null
       var current = await store.getTask(taskId)
       if (current && IN_PROGRESS.indexOf(current.status) >= 0) {
-        await failTask(current, createError && createError.isAppError ? createError.code : 5001)
+        await failTask(current, appError ? appError.code : 5001, appError ? { cause: appError } : {})
       } else if (current) {
         // 任务已存在但未进入 SUCCEEDED：兜底返还一次
         if (!current.quotaRefunded) {
@@ -535,7 +633,9 @@ function createHandler(deps) {
     try {
       queryResult = await vendor.query({ vendorTaskId: task.vendorTaskId })
     } catch (queryError) {
-      var failed = await failTask(task, 5001)
+      var failed = await failTask(task, 5001, {
+        cause: queryError && queryError.isAppError ? queryError : null
+      })
       return buildTaskView(failed)
     }
 
@@ -562,7 +662,14 @@ function createHandler(deps) {
     }
     if (state === 'FAILED') {
       var mapped = mapVendorFailure(queryResult.failureCode)
-      var failedTask = await failTask(task, mapped)
+      var failedTask = await failTask(task, mapped, {
+        cause: {
+          detail: {
+            vendorCode: queryResult.vendorCode,
+            httpStatus: queryResult.httpStatus
+          }
+        }
+      })
       return buildTaskView(failedTask)
     }
     var invalid = await failTask(task, 5005)

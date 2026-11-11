@@ -14,8 +14,10 @@
 
 var api = require('../../services/api')
 var consent = require('../../services/consent')
+var photoAdapt = require('../../services/photo-adapt')
 var precheck = require('../../services/precheck')
 var upload = require('../../services/upload')
+var clientCompat = require('../../utils/client-compat')
 
 var MAX_PHOTOS = precheck.MAX_PHOTOS
 var CAPTURE_URL = '/pages/capture/capture'
@@ -57,10 +59,13 @@ Page({
     formErrors: [],
     errorText: '',
     submitting: false,
+    processing: false,
+    compressionNote: '',
     precheckNote: ''
   },
 
   onLoad: function () {
+    if (clientCompat.isClientTooOld()) return
     this._wx = getWx()
     this._deleted = false
     if (!this._ensureConsent()) return
@@ -96,7 +101,7 @@ Page({
   _refreshCanSubmit: function () {
     var check = precheck.validateCaptureForm(this._formValue())
     var patch = {
-      canSubmit: check.ok && !this.data.submitting,
+      canSubmit: check.ok && !this.data.submitting && !this.data.processing,
       formErrors: check.errors,
       normalizedForm: check.normalized
     }
@@ -157,7 +162,7 @@ Page({
     if (index < 0 || index >= this.data.photos.length) return
     var photos = this.data.photos.slice()
     photos.splice(index, 1)
-    this.setData({ photos: photos, errorText: '' })
+    this.setData({ photos: photos, errorText: '', compressionNote: photos.length ? this.data.compressionNote : '' })
     this._refreshCanSubmit()
   },
 
@@ -190,40 +195,98 @@ Page({
     })
   },
 
-  /** 读取图片尺寸/方向并做 L0 同步预检；返回 {ok, message, photo}。 */
+  /**
+   * 读取图片尺寸/方向 → 按供应商规格自动压缩（SPEC v0.11 / AC-29）→ 压缩后 L0 同步预检。
+   * 小图不压缩、不提示；需要压缩时显示处理中并禁用后续按钮；失败一律不上传。
+   * 返回 {ok, message, photo}。
+   */
   _buildPhoto: function (file) {
     var self = this
     var started = Date.now()
     return this._readImageInfo(file).then(function (info) {
-      var meta = precheck.normalizePhotoMeta({
+      var raw = {
         path: (file && (file.tempFilePath || file.path)) || '',
         size: file && file.size,
         width: info && info.width,
         height: info && info.height,
         orientation: (info && info.orientation) || 'up',
-        type: (file && file.fileType) || ''
-      })
-      var l0 = precheck.validateImageL0(meta)
-      self._lastL0Ms = Date.now() - started
-      if (!l0.ok) {
-        return { ok: false, code: l0.code, message: l0.message, photo: null }
+        type: (file && file.fileType) || (info && info.type) || ''
       }
-      return {
-        ok: true,
-        message: '',
-        photo: {
-          path: meta.path,
-          size: meta.size,
-          width: meta.width,
-          height: meta.height,
-          mime: meta.mime,
-          orientation: meta.orientation,
-          assetId: '',
-          status: 'ready',
-          l0Ms: self._lastL0Ms,
-          precheck: null
+      var plan = photoAdapt.planVendorSpec(raw)
+      if (!plan.ok) {
+        return { ok: false, code: plan.code, message: plan.message, photo: null }
+      }
+
+      var finish = function (adapted) {
+        self._lastL0Ms = Date.now() - started
+        var meta = precheck.normalizePhotoMeta({
+          path: adapted.path,
+          size: adapted.bytes !== undefined ? adapted.bytes : raw.size,
+          width: adapted.width,
+          height: adapted.height,
+          orientation: 'up',
+          type: 'image/jpeg'
+        })
+        var l0 = precheck.validateImageL0(meta)
+        if (!l0.ok) {
+          return { ok: false, code: l0.code, message: l0.message, photo: null }
+        }
+        var note = photoAdapt.formatVendorCompressionNote(adapted)
+        return {
+          ok: true,
+          message: '',
+          photo: {
+            path: meta.path,
+            size: meta.size,
+            width: meta.width,
+            height: meta.height,
+            mime: meta.mime,
+            orientation: 'up',
+            assetId: '',
+            status: 'ready',
+            l0Ms: self._lastL0Ms,
+            compressed: !!adapted.processed,
+            compressionNote: note,
+            compressMs: adapted.elapsedMs || 0,
+            originalBytes: adapted.originalBytes !== undefined ? adapted.originalBytes : raw.size,
+            originalLongSide: adapted.originalLongSide || plan.longSide,
+            precheck: null
+          }
         }
       }
+
+      if (!plan.needsCompression) {
+        self.setData({ compressionNote: '' })
+        return finish({
+          ok: true,
+          processed: false,
+          path: raw.path,
+          bytes: raw.size,
+          width: plan.oriented.width,
+          height: plan.oriented.height,
+          longSide: plan.longSide,
+          mime: 'image/jpeg',
+          elapsedMs: 0
+        })
+      }
+
+      self.setData({ processing: true, errorText: '', compressionNote: '' })
+      return photoAdapt
+        .compressToVendorSpecFromWx(self._wx, raw)
+        .then(function (adapted) {
+          self.setData({ processing: false })
+          if (!adapted.ok) {
+            return { ok: false, code: adapted.code, message: adapted.message, photo: null }
+          }
+          self._lastCompressMs = adapted.elapsedMs || 0
+          self.setData({ compressionNote: photoAdapt.formatVendorCompressionNote(adapted) })
+          return finish(adapted)
+        })
+        .catch(function () {
+          self.setData({ processing: false })
+          var meta = photoAdapt.getPhotoErrorMeta('PHOTO_PROCESS_FAILED')
+          return { ok: false, code: meta.code, message: meta.message, photo: null }
+        })
     })
   },
 

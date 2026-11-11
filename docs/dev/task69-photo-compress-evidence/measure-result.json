@@ -1,0 +1,296 @@
+{
+  "generatedAt": "2026-11-11T14:50:03.164Z",
+  "method": "offline-approx(jimp 0.6.8 canvas emulation)",
+  "note": "档位/提示文案来自真实 photo-adapt.js；编码体积与耗时是 jimp 离线近似，真机 canvas 结果需 CP-12 验证。",
+  "cases": [
+    {
+      "id": "02",
+      "file": "人像照\\02-人像-超大-6000px.jpg",
+      "original": {
+        "bytes": 2606992,
+        "width": 4000,
+        "height": 6000,
+        "exifOrientation": 1,
+        "orientation": "up",
+        "type": "image/jpeg"
+      },
+      "plan": {
+        "ok": true,
+        "needsCompression": true,
+        "reasons": [
+          "oversized_pixels"
+        ],
+        "reason": "upload_limit",
+        "longSide": 6000
+      },
+      "renders": [
+        {
+          "seq": 1,
+          "target": {
+            "width": 2731,
+            "height": 4096
+          },
+          "quality": 0.92,
+          "bytes": 2056029
+        }
+      ],
+      "outcome": {
+        "ok": true,
+        "processed": true,
+        "compressed": true,
+        "path": "/offline/approx-1.jpg",
+        "filePath": "/offline/approx-1.jpg",
+        "bytes": 2056029,
+        "width": 2731,
+        "height": 4096,
+        "longSide": 4096,
+        "mime": "image/jpeg",
+        "quality": 0.92,
+        "sizeStep": 4096,
+        "sizeTier": 4096,
+        "elapsedMs": 1493,
+        "reason": "upload_limit",
+        "compressedReason": "upload_limit",
+        "originalBytes": 2606992,
+        "originalLongSide": 6000,
+        "attempts": [
+          {
+            "sizeStep": 4096,
+            "quality": 0.92,
+            "width": 2731,
+            "height": 4096,
+            "longSide": 4096,
+            "bytes": 2056029
+          }
+        ]
+      }
+    },
+    {
+      "id": "03",
+      "file": "人像照\\03-人像-压后仍超10MB.jpg",
+      "original": {
+        "bytes": 13731528,
+        "width": 2731,
+        "height": 4096,
+        "exifOrientation": 1,
+        "orientation": "up",
+        "type": "image/jpeg"
+      },
+      "plan": {
+        "ok": true,
+        "needsCompression": true,
+        "reasons": [
+          "oversized_bytes"
+        ],
+        "reason": "upload_limit",
+        "longSide": 4096
+      },
+      "renders": [
+        {
+          "seq": 1,
+          "target": {
+            "width": 2731,
+            "height": 4096
+          },
+          "quality": 0.92,
+          "bytes": 7284903
+        },
+        {
+          "seq": 2,
+          "target": {
+            "width": 2731,
+            "height": 4096
+          },
+          "quality": 0.85,
+          "bytes": 4145483
+        }
+      ],
+      "outcome": {
+        "ok": true,
+        "processed": true,
+        "compressed": true,
+        "path": "/offline/approx-2.jpg",
+        "filePath": "/offline/approx-2.jpg",
+        "bytes": 4145483,
+        "width": 2731,
+        "height": 4096,
+        "longSide": 4096,
+        "mime": "image/jpeg",
+        "quality": 0.85,
+        "sizeStep": 4096,
+        "sizeTier": 4096,
+        "elapsedMs": 2368,
+        "reason": "upload_limit",
+        "compressedReason": "upload_limit",
+        "originalBytes": 13731528,
+        "originalLongSide": 4096,
+        "attempts": [
+          {
+            "sizeStep": 4096,
+            "quality": 0.92,
+            "width": 2731,
+            "height": 4096,
+            "longSide": 4096,
+            "bytes": 7284903
+          },
+          {
+            "sizeStep": 4096,
+            "quality": 0.85,
+            "width": 2731,
+            "height": 4096,
+            "longSide": 4096,
+            "bytes": 4145483
+          }
+        ]
+      }
+    },
+    {
+      "id": "04",
+      "file": "人像照\\04-人像-低分辨率-800px.jpg",
+      "original": {
+        "bytes": 80834,
+        "width": 503,
+        "height": 800,
+        "exifOrientation": 1,
+        "orientation": "up",
+        "type": "image/jpeg"
+      },
+      "plan": {
+        "ok": false,
+        "reason": "too_small"
+      },
+      "renders": [],
+      "outcome": {
+        "ok": false,
+        "code": "PHOTO_TOO_SMALL",
+        "message": "分辨率过低，请重拍",
+        "reason": "too_small"
+      }
+    },
+    {
+      "id": "05",
+      "file": "人像照\\05-人像-EXIF竖拍-5184px.jpg",
+      "original": {
+        "bytes": 1435639,
+        "width": 5184,
+        "height": 3456,
+        "exifOrientation": 6,
+        "orientation": "right",
+        "type": "image/jpeg"
+      },
+      "plan": {
+        "ok": true,
+        "needsCompression": true,
+        "reasons": [
+          "exif_orientation",
+          "oversized_pixels"
+        ],
+        "reason": "upload_limit",
+        "longSide": 5184
+      },
+      "renders": [
+        {
+          "seq": 1,
+          "target": {
+            "width": 2731,
+            "height": 4096
+          },
+          "quality": 0.92,
+          "bytes": 1362162
+        }
+      ],
+      "outcome": {
+        "ok": true,
+        "processed": true,
+        "compressed": true,
+        "path": "/offline/approx-1.jpg",
+        "filePath": "/offline/approx-1.jpg",
+        "bytes": 1362162,
+        "width": 2731,
+        "height": 4096,
+        "longSide": 4096,
+        "mime": "image/jpeg",
+        "quality": 0.92,
+        "sizeStep": 4096,
+        "sizeTier": 4096,
+        "elapsedMs": 2457,
+        "reason": "upload_limit",
+        "compressedReason": "upload_limit",
+        "originalBytes": 1435639,
+        "originalLongSide": 5184,
+        "attempts": [
+          {
+            "sizeStep": 4096,
+            "quality": 0.92,
+            "width": 2731,
+            "height": 4096,
+            "longSide": 4096,
+            "bytes": 1362162
+          }
+        ]
+      }
+    },
+    {
+      "id": "06",
+      "file": "人像照\\06-人像-PNG格式-2400px.png",
+      "original": {
+        "bytes": 5167491,
+        "width": 1509,
+        "height": 2400,
+        "exifOrientation": 1,
+        "orientation": "up",
+        "type": "image/png"
+      },
+      "plan": {
+        "ok": true,
+        "needsCompression": true,
+        "reasons": [
+          "not_jpeg"
+        ],
+        "reason": "vendor_limit",
+        "longSide": 2400
+      },
+      "renders": [
+        {
+          "seq": 1,
+          "target": {
+            "width": 1509,
+            "height": 2400
+          },
+          "quality": 0.92,
+          "bytes": 1054885
+        }
+      ],
+      "outcome": {
+        "ok": true,
+        "processed": true,
+        "compressed": true,
+        "path": "/offline/approx-1.jpg",
+        "filePath": "/offline/approx-1.jpg",
+        "bytes": 1054885,
+        "width": 1509,
+        "height": 2400,
+        "longSide": 2400,
+        "mime": "image/jpeg",
+        "quality": 0.92,
+        "sizeStep": 4096,
+        "sizeTier": 4096,
+        "elapsedMs": 324,
+        "reason": "vendor_limit",
+        "compressedReason": "vendor_limit",
+        "originalBytes": 5167491,
+        "originalLongSide": 2400,
+        "attempts": [
+          {
+            "sizeStep": 4096,
+            "quality": 0.92,
+            "width": 1509,
+            "height": 2400,
+            "longSide": 2400,
+            "bytes": 1054885
+          }
+        ]
+      }
+    }
+  ]
+}

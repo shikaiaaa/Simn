@@ -40,10 +40,25 @@ var L0_MESSAGES = {
   L0_DIMENSIONS: '无法读取图片尺寸，请重新选择照片',
   L0_FORMAT: '仅支持 JPG / PNG 图片，请重新选择',
   L0_BYTES: '图片不能超过 10MB，请压缩后重试',
-  L0_SIZE_MIN: '照片长边需不小于 1024 像素，请重新拍摄',
-  L0_SIZE_MAX: '照片长边不能超过 4096 像素，请压缩后重试',
+  L0_SIZE_MIN: '分辨率过低，请重拍',
+  // 正常链路会先在端上自动压缩；此兜底仅在压缩后仍超 4096 时出现。
+  L0_SIZE_MAX: '压缩后照片仍超过 4096 像素，请更换照片',
   L0_ASPECT: '照片长宽比异常，请使用竖版全身照',
   L0_EXIF: '照片方向信息异常，请重新拍摄'
+}
+
+/**
+ * 端上照片处理错误码（SPEC v0.8：3014 E_PRECHECK_TOO_SMALL / 5007 E_PHOTO_PROCESS_FAILED）。
+ * 供采集页把自动压缩失败映射为可读文案；服务端业务结果也会回传 3014。
+ */
+var PHOTO_ERRORS = {
+  PHOTO_TOO_SMALL: { apiCode: 3014, name: 'E_PRECHECK_TOO_SMALL', message: '分辨率过低，请重拍' },
+  PHOTO_PROCESS_FAILED: { apiCode: 5007, name: 'E_PHOTO_PROCESS_FAILED', message: '照片处理失败，请重试或更换照片' },
+  PHOTO_TOO_LARGE: { apiCode: 5007, name: 'E_PHOTO_PROCESS_FAILED', message: '照片体积过大，请更换照片或重新拍摄' }
+}
+
+function getPhotoErrorMeta(code) {
+  return PHOTO_ERRORS[code] || PHOTO_ERRORS.PHOTO_PROCESS_FAILED
 }
 
 function toNumberOrNull(value) {
@@ -333,6 +348,8 @@ module.exports = {
   DEFAULT_GENDER: DEFAULT_GENDER,
   GARMENT_ACCEPT_HINT: GARMENT_ACCEPT_HINT,
   L0_MESSAGES: L0_MESSAGES,
+  PHOTO_ERRORS: PHOTO_ERRORS,
+  getPhotoErrorMeta: getPhotoErrorMeta,
   inferMime: inferMime,
   normalizePhotoMeta: normalizePhotoMeta,
   validateImageL0: validateImageL0,

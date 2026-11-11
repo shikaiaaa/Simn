@@ -56,6 +56,8 @@ var STATE_MAP = {
  * 真实错误码待 CP-04d 凭证实测后替换/补充；当前按类别关键词匹配，未识别一律 5001 并保留 vendorCode。
  */
 var CODE_RULES = [
+  // SPEC v0.11 §B.4：50411/50412/50413 等输入参数类错误 → 3015（不得兜底 5001）。
+  { re: /5041[0-9]/, code: 3015, hint: '照片超出供应商规格或参数不被接受，请重新选择或由端上压缩后重试' },
   { re: /content|safety|risk|policy|illegal|sensitive|moderation/i, code: 4001, hint: '内容安全校验未通过，请更换照片或服装图' },
   { re: /auth|signature|sign|credential|access.?denied|unauthor|forbidden|token|apikey|aksk/i, code: 5001, hint: '供应商鉴权失败/凭证无效' },
   { re: /balance|arrear|insufficient|payment|billing|not.?open|unopened|unsubscribe|service.?closed/i, code: 5001, hint: '供应商服务未开通或余额不足' },
@@ -104,11 +106,12 @@ function classifyVendorCode(vendorCode, httpStatus) {
   return { code: 5001, hint: '供应商返回未识别的错误' }
 }
 
-/** 供应商标记 FAILED 时给 handler 的 failureCode（handler 目前识别 content_blocked / region 两类）。 */
+/** 供应商标记 FAILED 时给 handler 的 failureCode（handler 识别 content/region/vendor_limit 三类）。 */
 function mapFailedStateCode(vendorCode, httpStatus) {
   var classified = classifyVendorCode(vendorCode, httpStatus)
   if (classified.code === 4001) return 'content_blocked'
   if (classified.code === 3002) return 'error_apply_region_not_detected'
+  if (classified.code === 3015) return 'precheck_vendor_limit'
   return 'vendor_generation_failed'
 }
 
@@ -222,7 +225,10 @@ function createVolcengineVendorAdapter(env, options) {
     })
     return errors.fail(classified.code, {
       hint: classified.hint,
-      detail: { vendorCode: vendorCode === undefined || vendorCode === null ? null : String(vendorCode) }
+      detail: {
+        vendorCode: vendorCode === undefined || vendorCode === null ? null : String(vendorCode),
+        httpStatus: typeof httpStatus === 'number' ? httpStatus : null
+      }
     })
   }
 
@@ -242,10 +248,10 @@ function createVolcengineVendorAdapter(env, options) {
     calls.submit += 1
     if (!configured) return Promise.reject(notConfigured('submit'))
     params = params || {}
-    // 只传语义化最小信息，不上传缓冲内容到日志/异常。
+    // task-56：真实传输层需要图片 Buffer（V2 base64 直传）；这里只透传 Buffer，绝不写日志/异常。
     var payload = {
-      personCount: Array.isArray(params.personBuffers) ? params.personBuffers.length : 0,
-      hasGarment: !!params.garmentBuffer,
+      personBuffers: Array.isArray(params.personBuffers) ? params.personBuffers : [],
+      garmentBuffer: params.garmentBuffer || null,
       metrics: params.metrics || null
     }
     return transportOf('submit', payload).then(function (response) {
@@ -284,10 +290,13 @@ function createVolcengineVendorAdapter(env, options) {
       }
       if (state === 'FAILED') {
         // 供应商已给出终态失败：返回 failureCode 由 handler 决定对外错误码；
-        // 完整 E_PRECHECK_* 区分待 CP-04d 真实错误码实测后补齐（当前 handler 识别 content/region 两类）。
+        // 同时带上脱敏 vendorCode/httpStatus，handler 持久化到 failure 字段（SPEC v0.11 §B.4）。
+        var failedCode = response.errorCode === undefined ? response.failureCode : response.errorCode
         return {
           state: 'FAILED',
-          failureCode: mapFailedStateCode(response.errorCode || response.failureCode, response.httpStatus)
+          failureCode: mapFailedStateCode(failedCode, response.httpStatus),
+          vendorCode: failedCode === undefined || failedCode === null ? null : String(failedCode),
+          httpStatus: typeof response.httpStatus === 'number' ? response.httpStatus : null
         }
       }
       if (state !== 'SUCCEEDED') {
@@ -296,9 +305,9 @@ function createVolcengineVendorAdapter(env, options) {
       return fetchResult(response).then(function (image) {
         return {
           state: 'SUCCEEDED',
-          imageBuffer: image,
-          width: numberOrUndefined(response.width || response.resultWidth),
-          height: numberOrUndefined(response.height || response.resultHeight)
+          imageBuffer: image.buffer,
+          width: numberOrUndefined(image.width || response.width || response.resultWidth),
+          height: numberOrUndefined(image.height || response.height || response.resultHeight)
         }
       })
     })
@@ -306,18 +315,23 @@ function createVolcengineVendorAdapter(env, options) {
 
   function fetchResult(response) {
     var inline = response.imageBuffer || (response.result && response.result.buffer)
-    if (Buffer.isBuffer(inline)) return Promise.resolve(inline)
+    if (Buffer.isBuffer(inline)) return Promise.resolve({ buffer: inline })
     var url = response.resultUrl || (response.result && (response.result.url || response.result.resultUrl)) || response.url
     if (!url) {
       return Promise.reject(errors.fail(5005, { hint: '火山引擎成功响应缺少结果图 URL' }))
     }
     calls.fetchResult += 1
     return transportOf('fetchResult', { url: String(url) }).then(function (result) {
-      var buffer = Buffer.isBuffer(result) ? result : result && result.buffer
+      if (Buffer.isBuffer(result)) return { buffer: result }
+      var buffer = result && result.buffer
       if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
         throw errors.fail(5005, { hint: '火山引擎结果图下载失败' })
       }
-      return buffer
+      return {
+        buffer: buffer,
+        width: result.width,
+        height: result.height
+      }
     })
   }
 

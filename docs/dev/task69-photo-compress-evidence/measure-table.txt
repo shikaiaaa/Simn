@@ -1,0 +1,35 @@
+task-69 离线压缩档位测量（jimp 近似；真机 canvas 待 CP-12）
+
+#02 人像照\02-人像-超大-6000px.jpg
+  原图: 4000x6000 / 2606992B / type=image/jpeg / EXIF Orientation=1（wx=up）
+  规划: ok=true needsCompression=true reason=upload_limit reasons=["oversized_pixels"] orientedLongSide=6000
+  结果: processed=true longSide=4096 bytes=2056029 quality=0.92 sizeStep=4096 elapsedMs=1493 reason=upload_limit
+  档位尝试(1 次):
+    #1 2731x4096 q=0.92 -> 2056029B
+
+#03 人像照\03-人像-压后仍超10MB.jpg
+  原图: 2731x4096 / 13731528B / type=image/jpeg / EXIF Orientation=1（wx=up）
+  规划: ok=true needsCompression=true reason=upload_limit reasons=["oversized_bytes"] orientedLongSide=4096
+  结果: processed=true longSide=4096 bytes=4145483 quality=0.85 sizeStep=4096 elapsedMs=2368 reason=upload_limit
+  档位尝试(2 次):
+    #1 2731x4096 q=0.92 -> 7284903B
+    #2 2731x4096 q=0.85 -> 4145483B
+
+#04 人像照\04-人像-低分辨率-800px.jpg
+  原图: 503x800 / 80834B / type=image/jpeg / EXIF Orientation=1（wx=up）
+  规划: ok=false needsCompression=undefined reason=too_small reasons=undefined orientedLongSide=undefined
+  结果: 拒绝 code=PHOTO_TOO_SMALL reason=too_small message=分辨率过低，请重拍
+
+#05 人像照\05-人像-EXIF竖拍-5184px.jpg
+  原图: 5184x3456 / 1435639B / type=image/jpeg / EXIF Orientation=6（wx=right）
+  规划: ok=true needsCompression=true reason=upload_limit reasons=["exif_orientation","oversized_pixels"] orientedLongSide=5184
+  结果: processed=true longSide=4096 bytes=1362162 quality=0.92 sizeStep=4096 elapsedMs=2457 reason=upload_limit
+  档位尝试(1 次):
+    #1 2731x4096 q=0.92 -> 1362162B
+
+#06 人像照\06-人像-PNG格式-2400px.png
+  原图: 1509x2400 / 5167491B / type=image/png / EXIF Orientation=1（wx=up）
+  规划: ok=true needsCompression=true reason=vendor_limit reasons=["not_jpeg"] orientedLongSide=2400
+  结果: processed=true longSide=2400 bytes=1054885 quality=0.92 sizeStep=4096 elapsedMs=324 reason=vendor_limit
+  档位尝试(1 次):
+    #1 1509x2400 q=0.92 -> 1054885B

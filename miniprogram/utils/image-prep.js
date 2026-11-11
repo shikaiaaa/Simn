@@ -170,7 +170,9 @@ function loadImage(canvas, src) {
 }
 
 // 用离屏 canvas 一次性完成 EXIF 纠正 + 长边缩放 + JPG 输出。
-function renderNormalized(src, info, target) {
+// 可选 options.quality：两级自适应压缩时按级别调低质量（默认 JPEG_QUALITY）。
+function renderNormalized(src, info, target, options) {
+  var quality = options && options.quality ? Number(options.quality) : JPEG_QUALITY;
   var transform = orientationTransform(info.orientation);
   var rotate = transform.rotate;
   var outWidth = target.width;
@@ -197,7 +199,7 @@ function renderNormalized(src, info, target) {
       destWidth: outWidth,
       destHeight: outHeight,
       fileType: 'jpg',
-      quality: JPEG_QUALITY
+      quality: quality
     });
   }).then(function (res) {
     return {

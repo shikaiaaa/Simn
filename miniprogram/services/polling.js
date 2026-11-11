@@ -1,14 +1,21 @@
 /**
  * services/polling.js —— 生成任务轮询与失败分类的纯逻辑（DEV-0001-07）。
  *
+ * SPEC v0.9 / REQ v0.6 口径：
+ * - 端上每 2s 轮询 taskGet；60s 只提示「生成较慢，请稍候」，不判超时；
+ * - 服务端 96s 判 TIMEOUT 并 5002（收到即进超时态）；
+ * - 101s（96s+5s）仅作为服务端异常/无终态响应的兜底硬上限。
+ *
  * 页面只负责调度（setTimeout/setInterval）与渲染；本模块保持零 wx 依赖，
- * 便于在 Node/jest 下用可控时钟验证 AC-8/9/10/12 的口径。
+ * 便于在 Node/jest 下用可控时钟验证 AC-7/8/9/10/12 的口径。
  */
 'use strict'
 
 var POLL_INTERVAL_MS = 2000
 var MAX_BACKOFF_MS = 10000
-var HARD_TIMEOUT_MS = 65000
+var SLOW_HINT_MS = 60000 // SPEC v0.9 §1：60s 仅提示变慢，不判超时
+var SERVER_TIMEOUT_MS = 96000 // SPEC v0.9 §2：服务端 96s 判 TIMEOUT（5002）
+var HARD_TIMEOUT_MS = 101000 // 96s + 5s：仅服务端无终态响应时兜底
 var MAX_NETWORK_ATTEMPTS = 3
 
 var TERMINAL_STATUSES = ['SUCCEEDED', 'FAILED', 'TIMEOUT', 'CANCELLED']
@@ -73,6 +80,48 @@ function shouldHardTimeout(elapsedMs) {
   return isFiniteNumber(elapsedMs) && elapsedMs >= HARD_TIMEOUT_MS
 }
 
+/**
+ * 已流逝毫秒：服务端 serverTime - createdAt 优先（AC-7 计时边界），
+ * 其次服务端 waitedSec，最后才退回本地 startedAt。
+ */
+function computeElapsedMs(input) {
+  var options = input || {}
+  if (isFiniteNumber(options.createdAt) && isFiniteNumber(options.serverTime)) {
+    return Math.max(0, options.serverTime - options.createdAt)
+  }
+  if (isFiniteNumber(options.waitedSec)) {
+    return Math.max(0, Math.floor(options.waitedSec * 1000))
+  }
+  if (isFiniteNumber(options.startedAt) && isFiniteNumber(options.now)) {
+    return Math.max(0, options.now - options.startedAt)
+  }
+  return 0
+}
+
+/** 等待态四段：正常 / 变慢提示 / 临近服务端超时 / 兜底硬上限。 */
+function waitPhase(elapsedMs) {
+  var ms = isFiniteNumber(elapsedMs) ? Math.max(0, elapsedMs) : 0
+  if (ms < SLOW_HINT_MS) return 'normal'
+  if (ms < SERVER_TIMEOUT_MS) return 'slow'
+  if (ms < HARD_TIMEOUT_MS) return 'late'
+  return 'hard_timeout'
+}
+
+/** 60–96s / 96–101s 的等待提示；其余阶段不显示额外提示。 */
+function waitHint(elapsedMs) {
+  var phase = waitPhase(elapsedMs)
+  if (phase === 'slow') return '生成较慢，请稍候'
+  if (phase === 'late') return '生成时间较长，正在等待结果…'
+  return ''
+}
+
+/** 101s 兜底：服务端无终态响应时才使用，区别于服务端 96s TIMEOUT 文案。 */
+function hardTimeoutFailure() {
+  return failureInfo('timeout', '生成超时', '等待超过 101 秒仍未收到生成结果，本次未出图；可重试或返回首页。', {
+    canRetry: true
+  })
+}
+
 function failureInfo(kind, title, message, extra) {
   var info = {
     kind: kind,
@@ -107,7 +156,7 @@ function classifyFailure(input) {
     return failureInfo('gone', '任务不存在', '任务不存在或已被删除、清理，无法查看结果。')
   }
   if (status === 'TIMEOUT' || code === 5002) {
-    return failureInfo('timeout', '生成超时', '生成超过 60 秒仍未完成，本次未出图；可重试或返回首页。', {
+    return failureInfo('timeout', '生成超时', '生成超过 96 秒仍未完成，本次未出图；可重试或返回首页。', {
       canRetry: true
     })
   }
@@ -153,6 +202,8 @@ function classifyFailure(input) {
 module.exports = {
   POLL_INTERVAL_MS: POLL_INTERVAL_MS,
   MAX_BACKOFF_MS: MAX_BACKOFF_MS,
+  SLOW_HINT_MS: SLOW_HINT_MS,
+  SERVER_TIMEOUT_MS: SERVER_TIMEOUT_MS,
   HARD_TIMEOUT_MS: HARD_TIMEOUT_MS,
   MAX_NETWORK_ATTEMPTS: MAX_NETWORK_ATTEMPTS,
   TERMINAL_STATUSES: TERMINAL_STATUSES,
@@ -163,5 +214,9 @@ module.exports = {
   formatWaited: formatWaited,
   nextDelayMs: nextDelayMs,
   shouldHardTimeout: shouldHardTimeout,
+  computeElapsedMs: computeElapsedMs,
+  waitPhase: waitPhase,
+  waitHint: waitHint,
+  hardTimeoutFailure: hardTimeoutFailure,
   classifyFailure: classifyFailure
 }

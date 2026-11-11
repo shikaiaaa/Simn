@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-11T11:26:08.214Z",
+  "generatedAt": "2026-11-11T15:22:19.751Z",
   "environment": {
     "cloudEnv": "not-provided (CP-02)",
     "vendor": "mock (SINN_VENDOR=mock)",
@@ -21,17 +21,17 @@
     {
       "step": "3. 人像采集（上传+assetRegister 幂等+服务端 precheck+表单）",
       "status": "pass",
-      "detail": "asset=a_27169d81f6abda906e883f0a，预检 status=pass，metrics.gender=male"
+      "detail": "asset=a_cedb59b82dc93f97eb2af90d，预检 status=pass，metrics.gender=male"
     },
     {
       "step": "4. 衣服采集 + createTask（预扣额度/单活跃/参数校验）",
       "status": "pass",
-      "detail": "taskId=t_b6774610ea4360bb6e4edd67，remaining=4"
+      "detail": "taskId=t_e2edfbf866657b4246fa6c4d，remaining=4"
     },
     {
       "step": "5. 生成轮询（阶段/等待秒数/SUCCEEDED+转存）",
       "status": "pass",
-      "detail": "seen=GENERATING→SUCCEEDED，waitedSec=1，result=cloud://mock-env/sinn/result/t_b6774610ea4360bb6e4edd67.png"
+      "detail": "seen=GENERATING→SUCCEEDED，waitedSec=1，result=cloud://mock-env/sinn/result/t_e2edfbf866657b4246fa6c4d.png"
     },
     {
       "step": "6. 结果页数据（服务端 sizeResult 格式化/AI 标识/降级提示）",

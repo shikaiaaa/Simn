@@ -6,6 +6,7 @@
 var api = require('../../services/api')
 var polling = require('../../services/polling')
 var consent = require('../../services/consent')
+var clientCompat = require('../../utils/client-compat')
 
 var RESULT_URL = '/pages/result/result'
 var INDEX_URL = '/pages/index/index'
@@ -57,6 +58,7 @@ Page({
     stageText: '排队中',
     waitedSec: 0,
     waitedText: '已等待 0 秒',
+    slowNotice: '',
     netNotice: '',
     terminal: false,
     errorKind: '',
@@ -67,6 +69,7 @@ Page({
   },
 
   onLoad: function (options) {
+    if (clientCompat.isClientTooOld()) return
     this._options = options || {}
     this._stopped = false
     this._inFlight = false
@@ -162,6 +165,7 @@ Page({
       errorMessage: '',
       canRetry: false,
       canCancel: false,
+      slowNotice: '',
       netNotice: ''
     })
     writeActiveTask(taskId)
@@ -234,14 +238,23 @@ Page({
   _applyTask: function (task, serverTime) {
     var status = task.status || 'QUEUED'
     var stage = task.stage || status
+    var nowMs = this._now()
     var waitedSec = polling.computeWaitedSec({
       waitedSec: task.waitedSec,
       serverTime: serverTime,
       createdAt: task.createdAt,
       startedAt: this._startedAt,
-      now: this._now()
+      now: nowMs
     })
-    this._serverBase = { waitedSec: waitedSec, at: this._now() }
+    // AC-7 计时边界：服务端 serverTime - createdAt；服务端无时间戳时才退回本地计时。
+    var elapsedMs = polling.computeElapsedMs({
+      waitedSec: task.waitedSec,
+      serverTime: serverTime,
+      createdAt: task.createdAt,
+      startedAt: this._startedAt,
+      now: nowMs
+    })
+    this._serverBase = { waitedSec: waitedSec, at: nowMs, elapsedMs: elapsedMs }
     this.setData({
       loading: false,
       status: status,
@@ -249,6 +262,7 @@ Page({
       stageText: polling.stageText(stage, status),
       waitedSec: waitedSec,
       waitedText: polling.formatWaited(waitedSec),
+      slowNotice: polling.waitHint(elapsedMs),
       netNotice: ''
     })
 
@@ -262,8 +276,8 @@ Page({
       this._showFailure(polling.classifyFailure({ status: status, failure: task.failure || null }))
       return
     }
-    if (polling.shouldHardTimeout(this._now() - this._startedAt)) {
-      this._showFailure(polling.classifyFailure({ status: 'TIMEOUT' }))
+    if (polling.shouldHardTimeout(elapsedMs)) {
+      this._showFailure(polling.hardTimeoutFailure())
       return
     }
     this._schedulePoll(polling.POLL_INTERVAL_MS)
@@ -272,14 +286,27 @@ Page({
   _tick: function () {
     if (this._stopped || this.data.terminal) return
     var nowMs = this._now()
-    if (polling.shouldHardTimeout(nowMs - this._startedAt)) {
-      this._showFailure(polling.classifyFailure({ status: 'TIMEOUT' }))
+    var elapsedMs
+    if (this._serverBase) {
+      // 以服务端时间戳为锚点，叠加本地流逝毫秒，避免本地时钟偏差影响 60s/96s 判据。
+      var baseElapsed = this._serverBase.elapsedMs
+      if (typeof baseElapsed !== 'number' || !isFinite(baseElapsed)) {
+        baseElapsed = (typeof this._serverBase.waitedSec === 'number' ? this._serverBase.waitedSec : 0) * 1000
+      }
+      elapsedMs = baseElapsed + Math.max(0, nowMs - this._serverBase.at)
+    } else {
+      elapsedMs = nowMs - this._startedAt
+    }
+    if (polling.shouldHardTimeout(elapsedMs)) {
+      this._showFailure(polling.hardTimeoutFailure())
       return
     }
-    var waitedSec = this._serverBase
-      ? this._serverBase.waitedSec + Math.floor((nowMs - this._serverBase.at) / 1000)
-      : Math.floor((nowMs - this._startedAt) / 1000)
-    this.setData({ waitedSec: waitedSec, waitedText: polling.formatWaited(waitedSec) })
+    var waitedSec = Math.max(0, Math.floor(elapsedMs / 1000))
+    this.setData({
+      waitedSec: waitedSec,
+      waitedText: polling.formatWaited(waitedSec),
+      slowNotice: polling.waitHint(elapsedMs)
+    })
   },
 
   _showFailure: function (info) {

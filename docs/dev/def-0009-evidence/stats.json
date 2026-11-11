@@ -1,0 +1,89 @@
+{
+  "result": {
+    "viewport": {
+      "windowWidth": 390,
+      "windowHeight": 844
+    },
+    "scrollBox": {
+      "id": "",
+      "dataset": {},
+      "left": 0,
+      "top": 91,
+      "right": 390,
+      "bottom": 844,
+      "width": 390,
+      "height": 753
+    },
+    "stage": {
+      "id": "",
+      "dataset": {},
+      "left": 16.700000762939453,
+      "top": 99.4000015258789,
+      "right": 373.4999885559082,
+      "bottom": 656.4999771118164,
+      "width": 356.79998779296875,
+      "height": 557.0999755859375
+    },
+    "actionsBefore": {
+      "id": "result-actions",
+      "dataset": {},
+      "left": 16.700000762939453,
+      "top": 899.800048828125,
+      "right": 373.4999885559082,
+      "bottom": 962.2000503540039,
+      "width": 356.79998779296875,
+      "height": 62.400001525878906
+    },
+    "actionsAfter": {
+      "id": "result-actions",
+      "dataset": {},
+      "left": 16.700000762939453,
+      "top": 700.1000366210938,
+      "right": 373.4999885559082,
+      "bottom": 762.5000381469727,
+      "width": 356.79998779296875,
+      "height": 62.400001525878906
+    },
+    "footnoteBefore": {
+      "id": "",
+      "dataset": {},
+      "left": 20.900001525878906,
+      "top": 974.7000122070312,
+      "right": 369.4000015258789,
+      "bottom": 1014.7000122070312,
+      "width": 348.5,
+      "height": 40
+    },
+    "actionsMovedIntoViewport": true,
+    "screenshots": {
+      "top": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0009-evidence\\result-scroll-top.png",
+      "bottom": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0009-evidence\\result-scroll-bottom.png"
+    }
+  },
+  "profile": {
+    "scrollBox": {
+      "id": "",
+      "dataset": {},
+      "left": 0,
+      "top": 91,
+      "right": 390,
+      "bottom": 844,
+      "width": 390,
+      "height": 753
+    },
+    "screenshot": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0009-evidence\\profile-page.png"
+  },
+  "generating": {
+    "scrollBox": {
+      "id": "",
+      "dataset": {},
+      "left": 0,
+      "top": 91,
+      "right": 390,
+      "bottom": 844,
+      "width": 390,
+      "height": 753
+    },
+    "screenshot": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\def-0009-evidence\\generating-page.png"
+  }
+}

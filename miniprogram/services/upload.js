@@ -13,6 +13,7 @@
 'use strict'
 
 var api = require('./api')
+var photoAdapt = require('./photo-adapt')
 
 var PERSON_DIR = 'person'
 var GARMENT_DIR = 'garment'
@@ -86,6 +87,21 @@ function uploadAndRegister(options) {
   }
   if (!w || !w.cloud || typeof w.cloud.uploadFile !== 'function') {
     return Promise.resolve(failResult({ code: 5006, name: 'E_UPLOAD_FAILED', message: '上传能力不可用，请重试' }, base))
+  }
+
+  // AC-29 ③：uploadFile 前二次断言——压到供应商规格（JPG/≤5MB/长边≤4096）之后才允许上传；
+  // 仍不合规时直接 5007，绝不把原图或不合规图传给云存储。
+  if (options.bytes !== undefined || options.width !== undefined || options.height !== undefined) {
+    var spec = photoAdapt.assertVendorSpec({
+      bytes: options.bytes,
+      width: options.width,
+      height: options.height,
+      mime: options.mime,
+      path: options.filePath
+    })
+    if (!spec.ok) {
+      return Promise.resolve(failResult({ code: spec.apiCode, name: spec.name, message: spec.message, hint: spec.hint }, base))
+    }
   }
 
   return Promise.resolve(

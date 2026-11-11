@@ -1,17 +1,32 @@
 // index.js —— 首页/功能说明（SPEC-0001 §A）
 // 入口：开始试穿、继续上次生成、我的；只做导航与状态展示，不调用任何隐私接口。
 const api = require('../../services/api')
+const clientCompat = require('../../utils/client-compat')
 
 Page({
   data: {
     loading: false,
     consented: false,
     hasActiveTask: false,
-    activeTaskId: ''
+    activeTaskId: '',
+    clientBlocked: false
+  },
+
+  onLoad() {
+    this._applyClientCompat()
   },
 
   onShow() {
+    if (this._applyClientCompat()) return
     this.refreshHomeState()
+  },
+
+  // 低版本微信（App.onLaunch 已判）时阻止渲染与请求。
+  _applyClientCompat() {
+    if (this.data.clientBlocked) return true
+    if (!clientCompat.isClientTooOld()) return false
+    this.setData({ clientBlocked: true })
+    return true
   },
 
   /**
@@ -45,16 +60,19 @@ Page({
   },
 
   onStart() {
+    if (this._applyClientCompat()) return
     const url = this.data.consented ? '/pages/capture/capture' : '/pages/consent/consent'
     wx.navigateTo({ url })
   },
 
   onResume() {
+    if (this._applyClientCompat()) return
     if (!this.data.activeTaskId) return
     wx.navigateTo({ url: '/pages/generating/generating?taskId=' + encodeURIComponent(this.data.activeTaskId) })
   },
 
   onProfile() {
+    if (this._applyClientCompat()) return
     wx.navigateTo({ url: '/pages/profile/profile' })
   }
 })

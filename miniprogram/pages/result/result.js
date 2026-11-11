@@ -11,6 +11,7 @@
 
 var api = require('../../services/api');
 var size = require('../../services/size');
+var clientCompat = require('../../utils/client-compat');
 
 var INDEX_URL = '/pages/index/index';
 
@@ -28,6 +29,7 @@ Page({
   },
 
   onLoad: function (options) {
+    if (clientCompat.isClientTooOld()) return
     var raw = options && options.taskId ? String(options.taskId) : '';
     var taskId = raw;
     try {
@@ -43,7 +45,34 @@ Page({
       return;
     }
     this.setData({ taskId: taskId });
+    this._recordAc7(taskId);
     this._loadTask(taskId);
+  },
+
+  /**
+   * AC-7 埋点：结果页 onload 即 resultReadyAt，仅内存 + 结构化日志，禁止 Storage/上传/照片信息。
+   * 计时起点来自 garment 页 createTask 成功后写入 globalData.ac7Timing 的 createdAt。
+   */
+  _recordAc7: function (taskId) {
+    var app = typeof getApp === 'function' ? getApp() : null;
+    var globalData = app && app.globalData;
+    var timing = globalData && globalData.ac7Timing;
+    if (!timing || String(timing.taskId) !== String(taskId)) return;
+    var createdAt = Number(timing.createdAt) || 0;
+    if (!createdAt) return;
+    var resultReadyAt = Date.now();
+    var record = {
+      requestId: timing.requestId || '',
+      taskId: String(taskId),
+      createdAt: createdAt,
+      resultReadyAt: resultReadyAt,
+      elapsedMs: Math.max(0, resultReadyAt - createdAt)
+    };
+    globalData.ac7Last = record;
+    globalData.ac7Timing = null;
+    if (typeof console !== 'undefined' && typeof console.info === 'function') {
+      console.info('[sinn/ac7]', JSON.stringify(record));
+    }
   },
 
   _loadTask: function (taskId) {

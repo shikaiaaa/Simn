@@ -27,6 +27,8 @@ var ERROR_CODES = {
   3011: { name: 'E_PRECHECK_MALL_IMAGE', message: '请勿上传电商商品图，请拍自己的衣服', httpStatus: 200 },
   3012: { name: 'E_PRECHECK_INVALID_IMAGE', message: '图片无法识别，请更换照片', httpStatus: 200 },
   3013: { name: 'E_PRECHECK_UNKNOWN', message: '照片校验暂时无法完成，请换一张或稍后重试', httpStatus: 200 },
+  3014: { name: 'E_PRECHECK_TOO_SMALL', message: '分辨率过低，请重拍', httpStatus: 200 },
+  3015: { name: 'E_PRECHECK_VENDOR_LIMIT', message: '照片超出生成服务规格，请更换照片或重拍', httpStatus: 200 },
   4001: { name: 'E_CONTENT_BLOCKED', message: '照片未通过内容安全审核，请更换照片', httpStatus: 200 },
   5001: { name: 'E_VENDOR_UNAVAILABLE', message: '生成服务暂时不可用，请稍后重试', httpStatus: 502 },
   5002: { name: 'E_TIMEOUT', message: '生成超时，本次未扣除额度，请重试', httpStatus: 504 },
@@ -34,6 +36,7 @@ var ERROR_CODES = {
   5004: { name: 'E_TASK_NOT_FOUND', message: '该记录不存在或已被删除', httpStatus: 404 },
   5005: { name: 'E_VENDOR_RESPONSE_INVALID', message: '生成服务返回异常，请重试', httpStatus: 502 },
   5006: { name: 'E_UPLOAD_FAILED', message: '照片上传失败，请重试', httpStatus: 0 },
+  5007: { name: 'E_PHOTO_PROCESS_FAILED', message: '照片处理失败，请重试或更换照片', httpStatus: 0 },
   5010: { name: 'E_TASK_GONE', message: '该记录已不可用', httpStatus: 410 },
   9000: { name: 'E_INTERNAL', message: '服务暂时不可用，请稍后重试', httpStatus: 500 }
 }

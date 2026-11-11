@@ -82,6 +82,10 @@
   line-height: 1.5;
 }
 
+.hint-ok {
+  color: #3c8c5a;
+}
+
 .disclaimer {
   margin-top: 24rpx;
   text-align: center;

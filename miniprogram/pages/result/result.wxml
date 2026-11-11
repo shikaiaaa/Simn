@@ -1,5 +1,6 @@
+<view class="screen">
 <navigation-bar title="试穿结果" back="{{true}}" color="black" background="#f7f7f8"></navigation-bar>
-<view class="page">
+<scroll-view class="page page-scroll" scroll-y>
   <view class="page-body">
     <view wx:if="{{loading}}" class="placeholder">正在加载结果…</view>
 
@@ -50,4 +51,5 @@
       <view class="result-footnote">删除本次结果会物理删除照片与结果，无法恢复；本次不返还额度。</view>
     </block>
   </view>
+</scroll-view>
 </view>

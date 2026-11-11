@@ -15,6 +15,7 @@
 
 var api = require('../../services/api')
 var consent = require('../../services/consent')
+var clientCompat = require('../../utils/client-compat')
 
 var QUOTA_CACHE_KEY = api.STORAGE_KEYS.QUOTA
 var QUOTA_TTL_MS = 60 * 1000
@@ -217,6 +218,7 @@ Page({
   },
 
   onShow: function () {
+    if (clientCompat.isClientTooOld()) return
     this.refreshProfile({ now: Date.now() })
   },
 

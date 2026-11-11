@@ -13,8 +13,10 @@
 
 var api = require('../../services/api')
 var consent = require('../../services/consent')
+var photoAdapt = require('../../services/photo-adapt')
 var precheck = require('../../services/precheck')
 var upload = require('../../services/upload')
+var clientCompat = require('../../utils/client-compat')
 
 var CAPTURE_URL = '/pages/capture/capture'
 var CONSENT_URL = '/pages/consent/consent'
@@ -46,11 +48,14 @@ Page({
     draft: null,
     canSubmit: false,
     submitting: false,
+    processing: false,
+    compressionNote: '',
     errorText: '',
     acceptHint: precheck.GARMENT_ACCEPT_HINT
   },
 
   onLoad: function (options) {
+    if (clientCompat.isClientTooOld()) return
     this._wx = getWx()
     this._deleted = false
     if (!this._ensureConsent()) return
@@ -99,7 +104,7 @@ Page({
 
   _refreshCanSubmit: function () {
     var check = precheck.validateGarmentForm({ photo: this.data.photo })
-    this.setData({ canSubmit: check.ok && !this.data.submitting })
+    this.setData({ canSubmit: check.ok && !this.data.submitting && !this.data.processing })
     return check
   },
 
@@ -169,33 +174,91 @@ Page({
     })
   },
 
+  /**
+   * 读取图片尺寸/方向 → 按供应商规格自动压缩（SPEC v0.11 / AC-29）→ 压缩后 L0 同步预检。
+   * 压缩期间处理中并禁用「开始生成」；压缩失败不上传原图。
+   */
   _buildPhoto: function (file) {
+    var self = this
     var started = Date.now()
     return this._readImageInfo(file).then(function (info) {
-      var meta = precheck.normalizePhotoMeta({
+      var raw = {
         path: (file && (file.tempFilePath || file.path)) || '',
         size: file && file.size,
         width: info && info.width,
         height: info && info.height,
         orientation: (info && info.orientation) || 'up',
-        type: (file && file.fileType) || ''
-      })
-      var l0 = precheck.validateImageL0(meta)
-      if (!l0.ok) return { ok: false, code: l0.code, message: l0.message, photo: null }
-      return {
-        ok: true,
-        photo: {
-          path: meta.path,
-          size: meta.size,
-          width: meta.width,
-          height: meta.height,
-          mime: meta.mime,
-          orientation: meta.orientation,
-          assetId: '',
-          status: 'ready',
-          l0Ms: Date.now() - started
+        type: (file && file.fileType) || (info && info.type) || ''
+      }
+      var plan = photoAdapt.planVendorSpec(raw)
+      if (!plan.ok) {
+        return { ok: false, code: plan.code, message: plan.message, photo: null }
+      }
+
+      var finish = function (adapted) {
+        var meta = precheck.normalizePhotoMeta({
+          path: adapted.path,
+          size: adapted.bytes !== undefined ? adapted.bytes : raw.size,
+          width: adapted.width,
+          height: adapted.height,
+          orientation: 'up',
+          type: 'image/jpeg'
+        })
+        var l0 = precheck.validateImageL0(meta)
+        if (!l0.ok) return { ok: false, code: l0.code, message: l0.message, photo: null }
+        var note = photoAdapt.formatVendorCompressionNote(adapted)
+        return {
+          ok: true,
+          photo: {
+            path: meta.path,
+            size: meta.size,
+            width: meta.width,
+            height: meta.height,
+            mime: meta.mime,
+            orientation: 'up',
+            assetId: '',
+            status: 'ready',
+            l0Ms: Date.now() - started,
+            compressed: !!adapted.processed,
+            compressionNote: note,
+            compressMs: adapted.elapsedMs || 0,
+            originalBytes: adapted.originalBytes !== undefined ? adapted.originalBytes : raw.size,
+            originalLongSide: adapted.originalLongSide || plan.longSide
+          }
         }
       }
+
+      if (!plan.needsCompression) {
+        self.setData({ compressionNote: '' })
+        return finish({
+          ok: true,
+          processed: false,
+          path: raw.path,
+          bytes: raw.size,
+          width: plan.oriented.width,
+          height: plan.oriented.height,
+          longSide: plan.longSide,
+          mime: 'image/jpeg',
+          elapsedMs: 0
+        })
+      }
+
+      self.setData({ processing: true, errorText: '', compressionNote: '' })
+      return photoAdapt
+        .compressToVendorSpecFromWx(self._wx, raw)
+        .then(function (adapted) {
+          self.setData({ processing: false })
+          if (!adapted.ok) {
+            return { ok: false, code: adapted.code, message: adapted.message, photo: null }
+          }
+          self.setData({ compressionNote: photoAdapt.formatVendorCompressionNote(adapted) })
+          return finish(adapted)
+        })
+        .catch(function () {
+          self.setData({ processing: false })
+          var meta = photoAdapt.getPhotoErrorMeta('PHOTO_PROCESS_FAILED')
+          return { ok: false, code: meta.code, message: meta.message, photo: null }
+        })
     })
   },
 
@@ -274,6 +337,14 @@ Page({
         if (!data.taskId) {
           self.setData({ errorText: '任务创建失败，请重试' })
           return null
+        }
+        // AC-7 埋点：仅内存记录计时起点（服务端返回的 createdAt），不写 Storage、不上传。
+        if (app && app.globalData) {
+          app.globalData.ac7Timing = {
+            requestId: (res && res.requestId) || '',
+            taskId: String(data.taskId),
+            createdAt: Number(data.createdAt) || 0
+          }
         }
         self._wx.navigateTo({ url: GENERATING_URL + '?taskId=' + encodeURIComponent(data.taskId) })
         return data
