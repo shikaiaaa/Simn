@@ -9,10 +9,17 @@
 |---|---|---|
 | SA | `docs/sa/**`、`docs/00-inbox/**` | 全部源码 |
 | SE | `docs/se/**` | `docs/sa/**`、源码（只读用于评估） |
-| DEV | `miniprogram/**`、`tests/unit/**`、`docs/dev/**` | `docs/sa/**`、`docs/se/**`、`docs/qa/**` |
-| QA | `tests/**`、`docs/qa/**` | `docs/sa/**`、`docs/se/**`、`docs/dev/**` |
+| DEV | `miniprogram/**`、`cloudfunctions/**`、`tests/unit/**`、`docs/dev/**` | `docs/sa/**`、`docs/se/**`、`docs/qa/**`、根配置（只读） |
+| QA | `tests/**`、`docs/qa/**` | `docs/sa/**`、`docs/se/**`、`docs/dev/**`、根配置（只读） |
+| Lead | 根配置：`project.config.json`、`project.private.config.json`、`package.json`、`jest.config.js`、`.gitignore`、`AGENTS.md`；集成、门禁执行与任务编排 | `docs/**`（只评审，不代写）、`miniprogram/**`、`cloudfunctions/**` |
 
 跨角色写文件一律禁止。需要对方改，发消息说明"哪条路径、改什么、为什么"，由 owner 自己改。
+
+补充约定（2026-11-09 用户裁定，见 `docs/se/SPEC-0001.md` CP-01/CP-02/CP-03）：
+
+- `cloudfunctions/**` 归 DEV（云函数代码，**不得**放在 `miniprogramRoot` 内，否则会打进小程序包）。
+- 根配置（`project.config.json`、`package.json`、`jest.config.js`、`.gitignore`、`tests/mocks/**`）由 Lead 维护；DEV/QA 需要增删依赖或改配置时，发消息给 Lead，由 Lead 改。
+- `tests/unit/**` 归 DEV，`tests/e2e/**`、`tests/fixtures/**` 归 QA；`tests/mocks/**` 为共享 mock，由 Lead 维护。
 
 ## 2. 上游门禁
 

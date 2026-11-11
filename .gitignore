@@ -1,9 +1,20 @@
 # 依赖与构建产物
 node_modules/
 miniprogram_npm/
+.npm-cache/
 
 # 开发者工具本地个人配置
 project.private.config.json
+
+# 测试与覆盖率产物
+coverage/
+tests/e2e/results/
+
+# 记忆插件运行时产物（本地）
+.memsearch/
+
+# 联调临时物（假 HOME / 探针脚本 / 截图 / 索引 JSON，均不入库）
+.tmp-*
 
 # 系统与日志
 .DS_Store

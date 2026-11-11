@@ -1,0 +1,234 @@
+{
+  "spec": "SPEC-0001",
+  "requirement": "REQ-0001",
+  "tasks": [
+    {
+      "id": "DEV-0001-01",
+      "role": "dev",
+      "title": "SPIKE：skyline 缩放 / 云开发可用性 / 试穿 API 选型 / 60s 与 2048px / 预检能力",
+      "dependsOn": [],
+      "writeScopes": ["docs/dev/SPIKE-0001.md", "miniprogram/pages/spike-zoom/", "cloudfunctions/spike-vendor/"],
+      "acceptance": [
+        "产出 docs/dev/SPIKE-0001.md，每个验证项给出「通过/不通过/降级」结论并附证据（截图、录屏、日志或响应样本）（**已完成：SPIKE-0001 已交付，`node docs/dev/spike-verify/run-all.js` 46/46 passed；真机/云开发/供应商/实测项仍阻塞，解锁条件见 SPIKE-0001 §1；任务保留供 QA 追溯**）",
+        "skyline 下双指缩放 1x–3x + 平移 + 复位：S1 movable-area/movable-view 与 S2 手写 touch 两方案各给可用性结论，真机至少 1 台 iOS + 1 台 Android",
+        "云开发可用性：云函数/云存储/云数据库/定时触发器可创建并调用，记录免费额度、冷启动与耗时",
+        "至少 3 家试穿 API 的输入要求/品类/输出分辨率/耗时/并发/免费试用额度/正式报价/境内可访问性/资质/数据留存与境外处理结论，给出首选+备选与理由（**已完成选型：用户 2026-11-10 定稿火山引擎「图片换装 V2」（境内 cn-north-1）；SPIKE 候选对比保留为历史依据，真实试用/报价/时延仍待 CP-04b/c/d**）",
+        "60s 内可达分辨率实测：2048px 与 1536px 分支各测 3 次，给出上传/预检/生成/转存/下载各阶段耗时分解；若 2048 不可达则给降级建议（交 CP-07）",
+        "预检能力结论：供应商 validate 接口或替代检测方案能否判单人/全身含脚/面部与身体遮挡/多人/逆光/衣服吊牌/多件/模特上身/电商图；不能判的项列出替代方案",
+        "端上图片预处理（EXIF 方向、格式 JPG/PNG、长边 ≤4096、≤10MB）在 skyline 下可行性结论",
+        "spike 结束后移除临时页 pages/spike-zoom 与临时云函数 cloudfunctions/spike-vendor，并还原 app.json（临时改动不登记写范围，避免与 DEV-0001-02 重叠）；移除证据写入 SPIKE-0001.md"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "DEV-0001-02",
+      "role": "dev",
+      "title": "工程骨架与路由：app.json 7 页注册、统一调用层、首页",
+      "dependsOn": ["DEV-0001-01"],
+      "writeScopes": ["miniprogram/app.js", "miniprogram/app.json", "miniprogram/app.wxss", "miniprogram/services/api.js", "miniprogram/pages/index/", "tests/unit/services/"],
+      "acceptance": [
+        "app.json 注册 7 页（index/consent/capture/garment/generating/result/profile，顺序与 SPEC A 节一致），移除 pages/logs/logs；renderer skyline、componentFramework glass-easel、lazyCodeLoading 保持；无 tabBar、无分包",
+        "为 6 个后续页面创建最小占位四件套（占位文件由各页面任务覆盖，占位文件不登记写范围以保持门禁 WARN=0；SPEC A 节已约定）",
+        "services/api.js：统一 wx.cloud.callFunction 封装，含统一响应包裹解析、错误码到用户文案映射、requestId 透传、超时、幂等 clientReqId 生成、同意前置校验；业务页面不直接裸调 callFunction",
+        "首页：功能说明、开始入口、恢复进行中任务入口、我的入口；文案无承诺词与导购词（对照 AC-23 正则）",
+        "L1 单测覆盖：成功、业务失败、网络失败、超时、未同意、恢复入口分支",
+        "check-wxapp.ps1 在占位阶段 FAIL=0（app.json 中每个页面存在 .js 与 .wxml），把门禁输出原文记入交接"
+      ],
+      "estimate": "1d"
+    },
+    {
+      "id": "DEV-0001-03",
+      "role": "dev",
+      "title": "云函数 sinn-task：资产/预检/任务状态机/参考尺码/供应商契约抽象与契约桩",
+      "dependsOn": ["DEV-0001-01"],
+      "writeScopes": ["cloudfunctions/sinn-task/", "tests/unit/cloudfunctions/task/"],
+      "acceptance": [
+        "实现 actions：assetRegister、precheck、createTask、taskGet、cancelTask、deleteTask、auditTask（auditTask 仅测试环境 + QA openid 白名单），统一响应包裹与错误码按 SPEC B 节",
+        "VendorAdapter 六方法契约（validate/submit/query/cancel/erase/health）+ MockVendorAdapter 契约桩（确定性 fixture：pass/fail/unknown、排队/成功/失败/超时/内容拦截，支持注入延迟）+ PrecheckAdapter（视觉模型或规则，方案待选型）+ `VolcengineVendorAdapter`（P1 指定供应商=火山引擎「图片换装 V2」：health/submit/query/validate（无独立预检端点则返回 unknown）/cancel/erase（无能力返回 `unsupported`）；仅读云函数环境变量 `SINN_VOLC_AK`/`SINN_VOLC_SK`/`SINN_VOLC_REGION`，未配置时 health 返回未就绪、不得当可用）+ `HttpVendorAdapter` 通用 HTTP 骨架（可选）；`SINN_VENDOR=mock|volcengine|tencentmps|perfectcorp|aliyun`，`mock` 为默认，`volcengine` 为 P1 指定真实 provider，其余仅保留枚举（备选不实现）；CP-04b/c/d 未就绪不阻塞开发，映射见 SPEC §B.4",
+        "预检三态契约：`validate` 返回 `{status:\"pass\"|\"fail\"|\"unknown\", checks[]}`，**`unknown` 不得当 pass**；供应商无独立预检端点（SPIKE-0001 §6；火山引擎「图片换装 V2」是否有 validate 端点待 CP-04d 凭证实测确认）→ 服务端 PrecheckAdapter 二次校验 + 供应商失败码映射兜底；unknown 返回 `pass:false` + E_PRECHECK_UNKNOWN(3013)，契约桩 fixture 驱动 AC-2/3/4/5/24",
+        "火山错误码→内部错误码映射（SPEC §B.4）：鉴权失败/签名错误/欠费/未开通/限流/5xx→E_VENDOR_UNAVAILABLE；任务超时/长时间无终态→E_TIMEOUT；响应不可解析/字段缺失/未知状态→E_VENDOR_RESPONSE_INVALID；内容安全类→E_CONTENT_BLOCKED；输入/人体不合格类→E_PRECHECK_*(422)；未识别记 vendorCode 并按 E_VENDOR_UNAVAILABLE 兜底（真实错误码清单待 CP-04d 实测补充，不得虚构）",
+        "createTask：预扣额度原子更新、单活跃任务、clientReqId 幂等（重复返回同一 taskId）、预检未过拒绝创建、metrics 服务端二次校验（含 `gender` ∈ male/female/unspecified，缺省/未传按 `unspecified`、非法值 E_PARAM）、越权 assetId 拒绝",
+        "参考尺码（端上零推理）：服务端按 `metrics.gender` 输出 sizeResult——`male`→GB/T 1335.1、`female`→GB/T 1335.2、`unspecified`→中性六档兜底；含 rangeMin/rangeMax/standard/basis/disclaimer；三围全缺返回 sizeResult=null；固定数值预期区间表供 AC-16/AC-26 断言",
+        "任务状态机与 60s 超时：超时置 TIMEOUT 并幂等返还额度；供应商成功后下载结果转存云存储并更新 SUCCEEDED；供应商失败映射到内部错误码",
+        "deleteTask：同一次云函数调用内物理删除云存储对象与任务/资产记录，响应 `deletedAt`（仅响应、不落库）；重复删除返回 404；不保留 tombstone/purgedAt 等墓碑字段（CP-08）",
+        "素材级测试：用契约桩 fixture 驱动 AC-2/3/4/5/6/10/24 的服务端判定与「任务创建 0 次」路径",
+        "L1 覆盖：状态迁移、幂等、退款一次、超时、越权按 404、错误码映射、供应商响应不可解析、三种 gender 的 sizeResult 与三围全缺降级",
+        "在 CP-02 云开发环境未开通前，以本地单测 + mock 完成；不阻塞于 CP-04 采购"
+      ],
+      "estimate": "3d"
+    },
+    {
+      "id": "DEV-0001-04",
+      "role": "dev",
+      "title": "云函数 sinn-account + sinn-cleanup：额度/同意/删除全部/24h 清理",
+      "dependsOn": ["DEV-0001-03"],
+      "writeScopes": ["cloudfunctions/sinn-account/", "cloudfunctions/sinn-cleanup/", "tests/unit/cloudfunctions/account/"],
+      "acceptance": [
+        "sinn-account actions：profile（额度/consent/activeTaskId/hasData）、recordConsent（version/ageConfirmed/privacyAgreed，写审计；审计字段仅用户/版本/时间/文本 hash，不含照片、围度与性别）、revokeConsent（物理删全部 + 清同意 + 取消进行中任务并退款）、deleteAll（物理删全部任务/资产/对象，保留同意审计；响应 `deletedAt` 不落库；幂等）；同意页披露文本（含「性别（选填）」与「不填不影响」）由 DEV-0001-05 承载",
+        "额度：dayKey（Asia/Shanghai）惰性重置、普通 1 / VIP 10、VIP 白名单读 sinn_config、预扣与返还接口供 sinn-task 复用",
+        "sinn-cleanup：定时触发器每 10 分钟按 purgeAt 批量物理删除**未删除**任务的云存储对象与任务/资产记录（不保留墓碑/中间状态）；单条失败不阻塞批次；日志记录 scanned/deleted/failed",
+        "对象删除走 cloud.deleteFile；删除后 auditTask 断言任务记录与资产记录均不存在（exists=false）、对象 HEAD 404（支撑 AC-20）",
+        "L1 覆盖（注入时钟）：跨天重置、额度扣减/返还幂等、撤回同意清数据、删除/清理后记录不存在、重复删除 404 与 deleteAll 幂等（无墓碑字段）",
+        "定时触发器配置与部署步骤写入交接文档（云开发控制台配置）"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "DEV-0001-05",
+      "role": "dev",
+      "title": "合规门禁页 consent：18+ 声明 + 隐私单独同意 + 拒绝降级",
+      "dependsOn": ["DEV-0001-02", "DEV-0001-04"],
+      "writeScopes": ["miniprogram/pages/consent/", "miniprogram/services/consent.js", "tests/unit/pages/consent/"],
+      "acceptance": [
+        "两步显式确认：18+ 声明与条款禁止 → 隐私单独同意（不默认勾选、不捆绑）；同意页列明 8 项：收集项（含「性别（选填）」）、用途、保存期限、境内第三方受托处理方（火山引擎，北京火山引擎科技有限公司）名称/所在地、处理目的、数据类别、删除方式、拒绝后果，并说明「性别不填不影响生成与参考尺码」",
+        "同意动作写服务端（recordConsent：用户/版本/时间/文本 hash）+ 本地 sinn_consent_v1；二次进入按服务端+本地状态免重复同意",
+        "集成 wx.requirePrivacyAuthorize / wx.onNeedPrivacyAuthorization，与自定义同意页合并；拒绝后不调用任何隐私 API（chooseMedia spy=0），停留功能说明",
+        "18+ 未确认时无法继续到上传页（AC-25）",
+        "L1 覆盖 AC-21/AC-25 关键断言：未同意不调隐私接口、同意记录字段、拒绝分支、已同意免重复",
+        "页面文案无承诺词/导购词；文本为 draft 版本（正式文本由需求方提供，CP-10）"
+      ],
+      "estimate": "1.5d"
+    },
+    {
+      "id": "DEV-0001-06",
+      "role": "dev",
+      "title": "采集链路：capture 人像/数值/性别 + garment 衣服 + 端上 L0 与服务端预检接入",
+      "dependsOn": ["DEV-0001-03", "DEV-0001-05"],
+      "writeScopes": ["miniprogram/pages/capture/", "miniprogram/pages/garment/", "miniprogram/services/upload.js", "miniprogram/services/precheck.js", "tests/unit/pages/capture/", "tests/unit/pages/garment/"],
+      "acceptance": [
+        "capture：人像 1–3 张，每项可单独重拍/修改；身高（100–250 整数）、体重（25–250，1 位小数）必填与校验；三围（40–200，1 位小数）选填与校验；性别选填（male/female/unspecified，默认 `unspecified`、可跳过不阻塞）；缺项/越界时「开始生成」禁用并提示具体缺失项（AC-1/AC-26）",
+        "端上 L0 预检：JPG/PNG、≤10MB、长边 1024–4096、长宽比、EXIF 方向；≤300ms 同步拦截，不上传不发网络",
+        "上传：wx.cloud.uploadFile + assetRegister；上传失败可重试且不产生重复资产、不扣额度",
+        "服务端 precheck 接入：≤5s 出结果（目标，硬超时 8s）；三态 `pass|fail|unknown`，**unknown 不视为通过**（提示换照片/稍后重试），预检未过或 unknown 均不调用 createTask（AC-2/3/4/5；供应商无独立预检端点，SPIKE-0001 §6；火山引擎「图片换装 V2」是否有 validate 端点待 CP-04d 凭证实测确认；失败码映射见 SPEC §B.4）",
+        "garment：单张上装；端上+服务端拦截吊牌/多件/模特上身/电商图，提示「仅接受自家衣服平铺/挂拍、单件完整展示」，任务创建 0 次（AC-24）",
+        "capture→garment→generating 页面参数与返回路径按 SPEC A 节；所有隐私 API 调用前经 services/consent.js 校验；性别不写入本地缓存，仅随 createTask 提交",
+        "L1/L2 覆盖 AC-1/2/3/4/5/24/26（mock 预检 fixture），记录 AC-2 的 ≤5s 断言方式"
+      ],
+      "estimate": "2.5d"
+    },
+    {
+      "id": "DEV-0001-07",
+      "role": "dev",
+      "title": "生成中页 generating：轮询、阶段进度、超时、失败分类、恢复与取消",
+      "dependsOn": ["DEV-0001-03", "DEV-0001-06"],
+      "writeScopes": ["miniprogram/pages/generating/", "miniprogram/services/polling.js", "tests/unit/pages/generating/"],
+      "acceptance": [
+        "2s 轮询 taskGet（网络失败指数退避，最大 10s），页面展示服务端 stage 与已等待秒数（以 serverTime 计算），不造假百分比（AC-8）",
+        "60–65s 内进入明确超时态：显示原因与「重试」按钮，不出图、不持续转圈（AC-9）",
+        "失败分类六类文案与下一步动作（照片/衣服不合格、额度不足、内容安全、网络、服务不可用/排队超时、生成超时），失败页不展示任何结果图（AC-6/10）；失败映射引用 SPEC §B.4 火山错误码表（E_VENDOR_UNAVAILABLE/E_TIMEOUT/E_VENDOR_RESPONSE_INVALID/E_CONTENT_BLOCKED）",
+        "离开页面再进入恢复同一任务：读 profile.activeTaskId / sinn_active_task_v1，任务 ID 相同、不重复创建、不重复扣额度（AC-12）",
+        "用户取消 cancelTask → CANCELLED + 额度返还，回首页；成功 redirectTo result；任务被删除/清理后 taskGet 返回 404，页面转失败/超时提示，不出图",
+        "L2 覆盖 AC-6/8/9/10/12（可控时钟 + mock 服务端状态迁移）；AC-7 的真网络 e2e 由 QA-0001-02 执行，DEV 提供可复现步骤"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "DEV-0001-08",
+      "role": "dev",
+      "title": "结果页 result：1x–3x 缩放组件、AI 标识、参考尺码、删除本次",
+      "dependsOn": ["DEV-0001-03"],
+      "writeScopes": ["miniprogram/pages/result/", "miniprogram/components/zoom-view/", "miniprogram/services/size.js", "tests/unit/pages/result/", "tests/unit/components/zoom-view/"],
+      "acceptance": [
+        "按 SPIKE-0001 结论落地缩放方案（**S2+ 手势组件 + worklet + applyAnimatedStyle 主实现；S2 手写 touch + transform 兜底；S1 `movable-area`/`movable-view` 官方不支持，不再候选**）：1x–3x 双指缩放、放大后平移、双击或按钮复位 1x、边界不越界、等比不变形、无白屏；单图源无拼接（AC-13/14/15）；真机未验证前（CP-12）只能写「实现完成、未实测」，不得宣称已通过",
+        "「AI 生成」显式标识在图片可视区紧邻、恒定可见、不遮挡主体，1x–3x 缩放与页面滚动后仍可见（独立图层，不随 transform 缩放）（AC-18）",
+        "参考尺码：展示六档内区间 + 对应标准名（GB/T 1335.1 / GB/T 1335.2 / 中性映射）+ 依据 + 固定免责「参考尺码，不构成合身承诺」；三围全缺显示「信息不足，无法给出参考尺码」；全页正则无结论词（AC-16/17/26）",
+        "删除本次数据：二次确认，取消不删；确认后调 deleteTask（物理全删、无墓碑、响应 deletedAt），回首页且不可再查看；成功额度不返还（AC-19/AC-20）",
+        "页面无分享、保存相册、价格/购买/下单/商家、3D 旋转/形象库入口；文案无导购词（AC-23）",
+        "L2 覆盖 AC-13/16/17/18/19/23/26；AC-14 尺寸断言 + 人工视觉由 QA-0001-03 执行，3 组样张与判定标准随 TC-0001 固化"
+      ],
+      "estimate": "2.5d"
+    },
+    {
+      "id": "DEV-0001-09",
+      "role": "dev",
+      "title": "我的页 profile：额度/VIP、删除全部、撤回同意",
+      "dependsOn": ["DEV-0001-02", "DEV-0001-04", "DEV-0001-05"],
+      "writeScopes": ["miniprogram/pages/profile/", "tests/unit/pages/profile/"],
+      "acceptance": [
+        "展示剩余次数、每日重置时间（服务端 resetAt/nextResetAt）、VIP 标识；额度缓存 60s TTL（AC-11）",
+        "删除全部数据：二次确认 → deleteAll（物理全删、无墓碑）→ 清本地缓存 → 回首页；成功后用户侧不可见；不重置当日已用额度",
+        "撤回同意入口：二次确认 → revokeConsent（物理删全部 + 置撤回）→ 清本地 sinn_consent_v1 等 → 回首页重新同意；保留同意审计与撤回记录（不含照片/围度/性别）（AC-21）",
+        "无分享/保存/购买/商家入口；文案符合 BR-10 红线",
+        "L1 覆盖额度展示、删除全部确认/取消、撤回同意后本地状态与路由"
+      ],
+      "estimate": "1d"
+    },
+    {
+      "id": "DEV-0001-10",
+      "role": "dev",
+      "title": "集成自检、包体积实测与 DEV 交接",
+      "dependsOn": ["DEV-0001-02", "DEV-0001-03", "DEV-0001-04", "DEV-0001-05", "DEV-0001-06", "DEV-0001-07", "DEV-0001-08", "DEV-0001-09"],
+      "writeScopes": ["docs/dev/DEV-0001.md"],
+      "acceptance": [
+        "两条门禁原文写入 docs/dev/DEV-0001.md：check-gates.ps1 与 check-wxapp.ps1 均 FAIL=0",
+        "包体积实测：主包 KB、页面数、无分包，回填 SPEC D 节预算表所需数据；证明未引入第三方运行库与未登记资源",
+        "全链路自检（mock provider 或真实 provider）：首页→同意→人像采集（含性别选填）→衣服→生成→结果→删除本次/删除全部，记录每步结果与阻塞项",
+        "AC 自检表：AC-1..AC-26 逐条标注「已实现/部分/未实现」及证据位置（测试或脚本），交 QA-0001-01 比对；AC-20 标注物理全删断言方式、AC-26 标注三种 gender 证据",
+        "交接文档包含：改动路径清单、如何运行单测/门禁、云开发部署与定时触发器步骤、火山引擎开通与凭证注入步骤（`SINN_VOLC_AK`/`SINN_VOLC_SK`/`SINN_VOLC_REGION` 仅云函数环境变量，禁止进仓库/端上）、单次成本 ≤2 元/次与「Units/积分→元/次 换算待正式报价」说明、urlCheck/上传域名说明（本地不校验域名不得进提交版本）、遗留风险与阻塞项",
+        "若真实供应商/云开发未就绪（CP-04b/c/d、CP-02），明确标注 AC-7/14/15/20 的阻塞原因与解锁条件，不虚报通过"
+      ],
+      "estimate": "1d"
+    },
+    {
+      "id": "QA-0001-01",
+      "role": "qa",
+      "title": "TC-0001 测试用例设计（AC-1..AC-26 全量映射）",
+      "dependsOn": ["DEV-0001-01"],
+      "writeScopes": ["docs/qa/TC-0001.md"],
+      "acceptance": [
+        "AC-1..AC-26 每条至少 1 条用例，编号 TC-0001-L{1|2|3|4}-{seq}，每条注明对应 AC、功能点 F-x、验证层（L1/L2/L3/人工/门禁）、前置与预期",
+        "固定素材清单与判定标准：全身/半身/遮挡/多人/逆光/吊牌/多件/模特上身/电商图/3 组结果样张（1x/3x 裁切对比）；另备 AC-26 同一组数值的三 gender（male/female/unspecified）预期区间表；素材路径与 SHA 记录，供后续迭代复用",
+        "AC-13/14/15 用例依据 SPIKE-0001 结论定稿（S1/S2 方案、2048/1536 分支）；SPIKE 未出结论前不得假设通过",
+        "AC-16 与 AC-26 尺码断言必须分开登记（双表标准名 + 中性兜底），不得把尺码断言挂到 AC-14；AC-20 按物理全删口径（deletedAt、查询 404、对象 HEAD 404、auditTask exists=false）登记",
+        "每条用例标注「自动化/人工视觉/门禁/阻塞条件」；缺开发者工具、缺供应商、缺云开发环境时写明阻塞与解锁条件",
+        "输出 AC→TC 覆盖矩阵，确认 26 条 AC 无遗漏、无重复承载"
+      ],
+      "estimate": "1.5d"
+    },
+    {
+      "id": "QA-0001-02",
+      "role": "qa",
+      "title": "L3 e2e 自动化（miniprogram-automator）与契约桩驱动用例",
+      "dependsOn": ["QA-0001-01", "DEV-0001-10"],
+      "writeScopes": ["tests/e2e/"],
+      "acceptance": [
+        "e2e 覆盖可自动化部分：AC-7（若真实网络可用）、AC-8/9（可控时钟或 mock）、AC-12、AC-19、AC-20（deletedAt + 查询 404 + 对象 HEAD 404 + auditTask exists=false）、AC-21（chooseMedia spy）、AC-23、AC-25",
+        "用 mock provider 契约桩驱动 AC-2/3/4/5/6/10/24，不依赖真实 API 采购",
+        "开发者工具环境缺失时，相关用例标「阻塞」并写明原因与解锁条件，不得标「通过」（AGENTS.md 小程序专项门禁 §4）",
+        "测试数据与固定素材不写入 miniprogram 包；e2e 产物与日志可复现",
+        "脚本运行说明写入模块 README 或 docblock，QA-0001-03 可一键复跑"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "QA-0001-03",
+      "role": "qa",
+      "title": "测试执行与 REPORT-0001（含 AC-26 与人工视觉 AC-14/15）",
+      "dependsOn": ["QA-0001-02"],
+      "writeScopes": ["docs/qa/REPORT-0001.md"],
+      "acceptance": [
+        "用例执行率 100%；AC-1..AC-26 每条给结论「通过/失败/阻塞」，阻塞项附原因与解锁条件",
+        "AC-14/15 人工视觉按固定样张 3/3 判定并留记录（执行人、日期、样张哈希、判定截图）；判定标准引用 TC-0001",
+        "AC-16/AC-26 参考尺码证据：三种 gender 的区间、对应标准名（GB/T 1335.1/1335.2/中性映射）、固定免责文案与禁词正则结果均留记录",
+        "失败项均有缺陷单（编号、复现步骤、期望/实际、影响 AC），不得只写「失败」",
+        "AC-22 门禁证据：check-wxapp.ps1 原文（FAIL=0）、包体积数字；AC-20 接口/存储断言截图或日志（物理全删、无墓碑）",
+        "报告给出明确结论（通过/有条件通过/不通过）；未闭合人工卡点必须列出，不得掩盖"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "QA-0001-04",
+      "role": "qa",
+      "title": "RELEASE-CHECKLIST 复核与 AC 覆盖复核",
+      "dependsOn": ["QA-0001-03"],
+      "writeScopes": ["docs/qa/RELEASE-CHECKLIST.md"],
+      "acceptance": [
+        "RELEASE-CHECKLIST 逐项勾选或标注阻塞（含人工卡点 CP-01..CP-13 状态：已闭合的写裁定依据，未闭合的写阻塞影响）",
+        "复核 QA-0001-01 覆盖矩阵：AC-1..AC-26 均有用例且结论已回填，无「未覆盖」",
+        "复核 AC-22 门禁 PASS 证据与 AC-14/15 人工视觉签署记录",
+        "未闭合项列明并说明对 REPORT 结论的影响；不得代签发布/提审"
+      ],
+      "estimate": "0.5d"
+    }
+  ]
+}
