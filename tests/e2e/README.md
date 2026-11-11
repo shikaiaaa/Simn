@@ -3,12 +3,14 @@
 本目录是 `docs/qa/TC-0001.md` §4.3 的 **12 条 L3 用例**的执行实现，基于
 [`miniprogram-automator`](https://www.npmjs.com/package/miniprogram-automator) 连接微信开发者工具。
 
-> **当前状态（2026-11-10 晚）**：本机改为 **connect 模式**（`SINN_E2E_WS` + `cli.bat auto`），
+> **当前状态（2026-11-11）**：本机用 **connect 模式**（`SINN_E2E_WS` + `cli.bat auto`），
 > 已绕过沙箱无法写 `.cli` 的 EPERM 限制；云开发环境可用（appid `wx735e60c2c07673aa`、
-> env `simn-01-d5gjsxm0ocb78add8`），隐私指引已配置。**L3-009 / L3-010 / L3-011 已真实执行通过**；
-> 其余用例依赖固定素材（MAT）、真实供应商、测试环境 audit、cleanup seed 等，仍如实标「阻塞」；
-> L3-002 因云端 `precheck` 返回 `E_INTERNAL 9000`（真实云缺陷候选，已报 Lead/DEV）暂记失败。
-> 详细执行记录与证据见 [`docs/qa/E2E-LOG-0001.md`](../../docs/qa/E2E-LOG-0001.md) v0.2。
+> env `simn-01-d5gjsxm0ocb78add8`），隐私指引已配置。**L3-002 / 009 / 010 / 011 已真实执行通过**
+> （最终全量 runId `20261111-002136`：4 通过 / 0 失败 / 8 阻塞）；
+> 其余用例依赖固定素材（MAT）、真实供应商、测试环境 audit、cleanup seed 等，仍如实标「阻塞」。
+> 详细执行记录、证据哈希与阻塞项见 [`docs/qa/E2E-LOG-0001.md`](../../docs/qa/E2E-LOG-0001.md) v0.4。
+> 生产代码中的受保护调试入口（`selftest`/`quotaReset`/`cleanupSeed`/`precheckDebug` 等）
+> 已于 2026-11-11 task-44 移除，本目录运行路径不依赖任何夹具（见下方「注意」）。
 
 ## 目录
 
@@ -84,6 +86,11 @@ node tests/e2e/run-e2e.js
   `lib/harness.js` 已改用小程序内 `wx.reLaunch`（`appReLaunch`）并避开「点 consent 复选框后立即导航」，
   新用例请复用这些 helper，不要直接调 `mp.reLaunch`。
 - CLI 登录态探测仍可能显示 EPERM（写 `.cli` 失败），connect 模式不依赖它。
+- **额度与夹具**：普通账号每日 1 次额度，L3-002 每次完整执行会消耗该额度；额度已用时需等北京时间
+  次日 00:00 自然重置，或在云开发控制台人工重置**仅测试环境**的 `sinn_users.quota.usedToday`
+  （不新增任何生产入口，人工重置不写入用例步骤）。2026-11-11 task-44 已移除全部生产调试入口
+  （`selftest`/`quotaReset`/`cleanupSeed`/`precheckDebug` 等），runner 与用例均不依赖夹具；
+  历史探针脚本若探测到 `E_PARAM(1001)`，按「夹具已随 task-44 移除」**阻塞 exit 2** 处理，不得视为产品失败。
 
 ## 运行
 

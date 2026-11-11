@@ -11,7 +11,7 @@ P1「2D 虚拟试穿」内部 demo 已完整走完一轮四角色流水线
 check-gates.ps1   → 10 个文档, 1 个任务清单, FAIL=0, WARN=0
 check-wxapp.ps1   → appid: wx735e60c2c07673aa
                     7 个页面, 0 个分包, 主包 174.6KB / 合计 174.6KB, FAIL=0, WARN=0
-jest              → 32 suites / 419 tests 全绿
+jest              → 27 suites / 359 tests 全绿（调试入口移除后）
 integration-check → 10/10 PASS（mock 全链路）
 e2e（真实云）      → 12 条 L3：4 通过 / 0 失败 / 8 阻塞
 ```
@@ -134,14 +134,21 @@ node docs/dev/integration-check.js
 node tests/e2e/run-e2e.js
 ```
 
-## 9. demo 收尾前必须处理
+## 9. demo 收尾状态
 
-- **移除受保护的调试入口**：`bootstrap` / `selftest` / `precheckDebug` / `cleanupSeed` /
-  `cleanupCheck` / `quotaReset` 及 `SINN_SELFTEST` 环境变量（登记见 `docs/dev/DEV-0001.md`
-  「上线前移除清单」）。
-- **清理本地联调临时物**：`.tmp-*`（假 HOME、CLI 登录凭据、探针脚本、截图），均已被 `.gitignore` 排除。
-- **外部解锁项**：轮换已泄露的火山 AK/SK（SEC-01）、开通「图片换装 V2」并实测（CP-04）、
-  真机与人工视觉（CP-11/CP-12）、正式隐私文本（CP-10）、素材（E-7）。
+- ✅ **受保护调试入口已移除**（2026-11-11，task-44）：`bootstrap` / `selftest` / `precheckDebug` /
+  `cleanupSeed` / `cleanupCheck` / `quotaReset` 与 `debug-gate.js` 已从生产代码删除并重新部署
+  `sinn-task`（16 文件 / 44.0KB）；线上验证这些 action 返回 `E_PARAM(1001)`，`profile` 正常。
+  控制台若还留着 `SINN_SELFTEST` 环境变量，直接删除即可（代码已不读）。
+  记录见 `docs/dev/DEV-0001.md` §DEV-0001-42。
+- ✅ **本地联调临时物已清理**：`.tmp-*`（假 HOME、CLI 登录凭据、探针脚本、截图）均已删除并
+  被 `.gitignore` 排除；仓库中无临时物、无真实密钥。
+- ✅ **代码已托管**：`git@github.com:shikaiaaa/Simn.git` 的 `main` 分支（本地提交 + 合并远端
+  Initial commit，`git status` 干净）。
+- ⏳ **外部解锁项（不属于代码问题）**：轮换已泄露的火山 AK/SK（SEC-01）、开通「图片换装 V2」
+  并实测（CP-04）、真机与人工视觉（CP-11/CP-12）、正式隐私文本（CP-10）、素材（E-7）。
+  e2e 复跑前提：等次日 00:00 额度自然重置，或在云开发控制台人工重置**仅测试环境**的
+  `sinn_users.quota.usedToday`（见 `docs/qa/E2E-LOG-0001.md` v0.4 §6.3）。
 
 ## 10. 参考实现
 
