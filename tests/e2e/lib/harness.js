@@ -363,6 +363,114 @@ async function callCount(mp, method) {
   );
 }
 
+/**
+ * 包装 wx.cloud.callFunction，记录每次云函数调用的 name/action/requestId/耗时/是否成功。
+ * 用途（task-71）：真实供应商回归时留存 createTask 的 requestId 供成本/链路追溯。
+ * 注意：同一 app 实例跨 connect 复用。若检测到旧包装（含 __e2eOriginal）会先恢复原函数再重装，
+ * 避免多层包装；Promise 风格调用必须继续返回 Promise（services/api.js 依赖返回值 .then），
+ * 回调风格保持原 success/fail 并记录，不改变调用行为。
+ */
+async function installCloudCallLogger(mp) {
+  return evaluate(
+    mp,
+    function () {
+      const app = getApp();
+      app.globalData = app.globalData || {};
+      app.globalData.__e2eCloudCalls = [];
+      if (!wx.cloud || typeof wx.cloud.callFunction !== 'function') {
+        return { installed: false, reason: 'wx.cloud.callFunction 不可用' };
+      }
+      // 兼容重装：旧包装若保存了原函数则恢复，再重新包装（用于修正历史包装缺陷）。
+      const current = wx.cloud.callFunction;
+      if (current.__e2eCloudWrapped && typeof current.__e2eOriginal === 'function') {
+        wx.cloud.callFunction = current.__e2eOriginal;
+      }
+      const original = wx.cloud.callFunction;
+      if (original.__e2eCloudWrapped) return { installed: true, reused: true };
+      const wrapped = function (options) {
+        if (!options || typeof options !== 'object') return original.apply(wx.cloud, arguments);
+        const name = options.name || null;
+        const action = options.data && options.data.action ? options.data.action : null;
+        const startedAt = Date.now();
+        const record = function (ok, payload) {
+          app.globalData.__e2eCloudCalls.push({
+            name: name,
+            action: action,
+            ok: ok,
+            requestId: (payload && payload.requestId) || null,
+            error: ok ? null : (payload && (payload.errMsg || payload.message)) || null,
+            durationMs: Date.now() - startedAt,
+            at: Date.now(),
+          });
+        };
+        // 回调风格：保留原 success/fail 并记录。
+        if (typeof options.success === 'function' || typeof options.fail === 'function') {
+          const success = options.success;
+          const fail = options.fail;
+          const next = Object.assign({}, options);
+          next.success = function (res) {
+            try {
+              record(true, (res && res.result) || null);
+            } catch (e) {
+              /* 记录失败不影响原回调 */
+            }
+            if (typeof success === 'function') success(res);
+          };
+          next.fail = function (err) {
+            try {
+              record(false, err || null);
+            } catch (e) {
+              /* ignore */
+            }
+            if (typeof fail === 'function') fail(err);
+          };
+          return original.call(wx.cloud, next);
+        }
+        // Promise 风格：必须继续返回 Promise（services/api.js 依赖 .then）。
+        const p = original.call(wx.cloud, options);
+        if (p && typeof p.then === 'function') {
+          return p.then(
+            function (res) {
+              try {
+                record(true, (res && res.result) || null);
+              } catch (e) {
+                /* ignore */
+              }
+              return res;
+            },
+            function (err) {
+              try {
+                record(false, err || null);
+              } catch (e) {
+                /* ignore */
+              }
+              throw err;
+            }
+          );
+        }
+        return p;
+      };
+      wrapped.__e2eCloudWrapped = true;
+      wrapped.__e2eOriginal = original;
+      wx.cloud.callFunction = wrapped;
+      return { installed: true };
+    },
+    null
+  );
+}
+
+/** 读取 installCloudCallLogger 记录的调用日志（副本）。 */
+async function cloudCallLog(mp) {
+  return evaluate(
+    mp,
+    function () {
+      const app = getApp();
+      return (app.globalData && app.globalData.__e2eCloudCalls ? app.globalData.__e2eCloudCalls : []).slice();
+    },
+    null
+  );
+}
+
 /** wx.getPrivacySetting（CP-05 是否配置隐私指引的真实探针）。 */
 async function privacySetting(mp) {
   return evaluate(
@@ -559,6 +667,8 @@ module.exports = {
   restoreChooseMedia,
   installCallCounter,
   callCount,
+  installCloudCallLogger,
+  cloudCallLog,
   privacySetting,
   goIndex,
   appReLaunch,

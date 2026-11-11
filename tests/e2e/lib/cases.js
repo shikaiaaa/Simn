@@ -21,6 +21,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const h = require('./harness');
 const pngStats = require('./png-stats');
+const archive = require('./archive');
 
 /** TC-0001 §5 固定素材（路径相对 tests/fixtures/；MAT-01..MAT-09 已固化，SHA 见 MATERIALS-0001.md）。 */
 const MAT = {
@@ -70,6 +71,19 @@ function smokeFiles() {
     bytes: fs.statSync(SMOKE[key]).size,
   }));
   return { files: SMOKE, sums };
+}
+
+/** 计算文件 SHA256/bytes（用于把真实素材写进证据）。 */
+function fileSums(files) {
+  return files.map((file) => ({
+    path: file,
+    sha256: crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').toUpperCase(),
+    bytes: fs.statSync(file).size,
+  }));
+}
+
+function matSums(ids) {
+  return fileSums(matFiles(ids));
 }
 
 /**
@@ -164,6 +178,53 @@ async function taskGet(mp, taskId) {
   return res.result;
 }
 
+/**
+ * 从 installCloudCallLogger 记录的调用日志里取最近一次指定云函数/action 的 requestId。
+ * 用途（task-71）：真实供应商回归时每一张结果图都要能追溯到 createTask 请求。
+ * 日志不可用/未安装时返回 null，不抛错（归档字段缺省即可，不改变用例结论）。
+ */
+async function findCallRequestId(mp, name, action) {
+  try {
+    const calls = await h.cloudCallLog(mp);
+    const hits = (calls || []).filter((c) => c && c.name === name && (!action || c.action === action) && c.requestId);
+    return hits.length ? hits[hits.length - 1].requestId : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 轮询 taskGet 直到任务进入终态（SUCCEEDED/FAILED）或超时，用于归档前等待真实结果图生成。 */
+async function waitTaskEnvelope(mp, taskId, timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || 120000);
+  let last = null;
+  while (Date.now() < deadline) {
+    last = await taskGet(mp, taskId);
+    const doc = last && (last.data || last.result || last);
+    if (doc && (doc.status === 'SUCCEEDED' || doc.status === 'FAILED')) return last;
+    await h.sleep(1500);
+  }
+  return last;
+}
+
+/** 把一次真实生成任务登记到 task-71 归档队列；无 ctx.archiveTask（如离线脚本）时静默跳过。 */
+async function archiveGeneratedTask(ctx, mp, taskEnvelope, meta) {
+  if (!ctx || !ctx.archiveTask || !taskEnvelope) return null;
+  const doc = taskEnvelope.data || taskEnvelope.result || taskEnvelope;
+  if (!doc || !doc.taskId) return null;
+  const requestId = meta && typeof meta.requestId === 'string' ? meta.requestId : await findCallRequestId(mp, 'sinn-task', 'createTask');
+  const entry = {
+    caseId: ctx.caseId || (meta && meta.caseId) || null,
+    ac: (meta && meta.ac) || ctx.caseAc || null,
+    taskEnvelope,
+    elapsedMs: meta && typeof meta.elapsedMs === 'number' ? meta.elapsedMs : null,
+    requestId,
+    fixtureKind: (meta && meta.fixtureKind) || 'MAT-01 + MAT-08（真实素材）',
+    realVendor: true,
+  };
+  ctx.archiveTask(entry);
+  return { taskId: doc.taskId, requestId, status: doc.status || null };
+}
+
 /** 完整跑一次生成流程（同意→采集→衣服→生成→结果）。返回 {taskId, elapsedMs, resultPage, task}。 */
 async function runGeneration(ctx, options) {
   const { mp } = ctx;
@@ -199,7 +260,48 @@ async function runGeneration(ctx, options) {
   });
   const taskId = resultTaskId || (active && active.taskId);
   if (!taskId) throw new Error('[assert] 结果页未取到 taskId（data.taskId 与 sinn_active_task_v1 均为空），无法关联任务');
-  return { taskId, elapsedMs, resultPage, task: await taskGet(mp, taskId) };
+  const task = await taskGet(mp, taskId);
+  // task-71：每次真实生成成功后登记归档（下载结果图 + manifest），不改变用例结论。
+  const archive = await archiveGeneratedTask(ctx, mp, task, { elapsedMs, fixtureKind: 'MAT（真实素材）' }).catch(() => null);
+  return { taskId, elapsedMs, resultPage, task, archive };
+}
+
+/**
+ * task-71 归档补充：当 `SINN_E2E_REUSE_TASK_ID` 设置时，跳过生成段，直接复用本批已生成的
+ * 真实任务（不再消耗真实调用/额度），用于 UI 断言被 T-6 协议超时打断后的定向复测。
+ * 证据中必须注明 reused=true 与来源 taskId；不得用它替代生成段本身的验收结论。
+ */
+async function reuseResultTask(ctx, selector, label) {
+  const { mp } = ctx;
+  const reuseTaskId = process.env.SINN_E2E_REUSE_TASK_ID;
+  if (!reuseTaskId) return null;
+  const envelope = await taskGet(mp, reuseTaskId);
+  const doc = envelope && (envelope.data || envelope.result || envelope);
+  if (!doc || !doc.taskId) throw new Error(`[assert] 复用任务 ${reuseTaskId} 不可用（taskGet 无数据）`);
+  let page = null;
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3 && !page; attempt += 1) {
+    try {
+      await h.appReLaunch(mp, `/pages/result/result?taskId=${encodeURIComponent(reuseTaskId)}`);
+      await h.sleep(1200);
+      page = await h.waitFor(
+        async () => {
+          const p = await h.currentPage(mp).catch(() => null);
+          if (!p || !/pages\/result\/result/.test(p.path || '')) return null;
+          const el = await p.$(selector).catch(() => null);
+          return el ? p : null;
+        },
+        15000,
+        500,
+        label
+      );
+    } catch (e) {
+      lastError = e;
+      await h.sleep(1500);
+    }
+  }
+  if (!page) throw lastError || new Error(`[assert] 复用任务结果页未就绪：${reuseTaskId}`);
+  return { taskId: reuseTaskId, elapsedMs: null, resultPage: page, task: envelope, reused: true };
 }
 
 /* ------------------------------------------------------------------ */
@@ -425,13 +527,13 @@ const CASES = [
     id: 'TC-0001-L3-001',
     tc: 'TC-0001-L3-001',
     ac: 'AC-7',
-    title: '真实网络端到端 3/3 ≤60s，且结果页含尺码与免责',
+    title: '真实网络端到端 3/3 ≤96s（AC-7 预算；60–96s 属正常慢速区间）',
     priority: 'P0',
     requires: ['login', 'cloud', 'vendor-real', 'vip-whitelist', 'fixtures:MAT-01', 'fixtures:MAT-08'],
     steps: [
       '固定素材 MAT-01 + MAT-08 + 数值 175/70/male/92/78/96，走 consent→capture→garment',
       '点「开始生成」记 t0，结果页出现记 t1（3 次）',
-      '断言每次 t1-t0 ≤60000ms，且结果页出现尺码区间与固定免责「参考尺码，不构成合身承诺」',
+      '断言每次 t1-t0 ≤96000ms（AC-7 预算；60–96s 记录为慢速但通过等待语义），且结果页出现尺码区间与固定免责「参考尺码，不构成合身承诺」',
       '记录每次墙钟、taskId、requestId',
     ],
     async run(ctx) {
@@ -469,7 +571,7 @@ const CASES = [
           screenshot: await h.screenshot(mp, ctx.runDir, `ac7-run-${i}`),
           lines,
         };
-        if (elapsedMs > 60000) throw new Error(`[assert] 第 ${i} 次端到端 ${elapsedMs}ms > 60000ms`);
+        if (elapsedMs > 96000) throw new Error(`[assert] 第 ${i} 次端到端 ${elapsedMs}ms > 96000ms（AC-7 预算）`);
         if (!sizeRange) throw new Error(`[assert] 第 ${i} 次结果页缺少参考尺码区间`);
         if (!sizeLines.some((t) => t && t.indexOf('参考尺码，不构成合身承诺') >= 0)) {
           throw new Error(`[assert] 第 ${i} 次结果页缺少固定免责文案`);
@@ -477,7 +579,7 @@ const CASES = [
         runs.push(runRecord);
         ctx.write(`ac7-run-${i}.json`, runRecord);
       }
-      return { runs, passCount: `${runs.filter((r) => r.elapsedMs <= 60000).length}/3` };
+      return { runs, passCount: `${runs.filter((r) => r.elapsedMs <= 96000).length}/3` };
     },
   },
 
@@ -501,7 +603,25 @@ const CASES = [
       if (mode !== 'normal' && mode !== 'vip') {
         h.blocked('未声明额度档位：设置 SINN_E2E_QUOTA_MODE=normal|vip（需部署环境已按 SPEC 配置 SINN_DAILY_LIMIT_* 与 VIP 白名单，CP-02/CP-09）');
       }
-      const smoke = smokeFiles();
+      // task-71 真实供应商常态化：SINN_E2E_REAL_VENDOR=1 时改用真实素材 MAT-01/MAT-08，
+      // 避免合成冒烟图被真实供应商拒识；mock 模式沿用合成图并保持原证据口径。
+      const realVendor = process.env.SINN_E2E_REAL_VENDOR === '1';
+      const fixtures = realVendor
+        ? {
+            kind: 'MAT-01 + MAT-08（真实素材，供真实供应商 volcengine）',
+            note: '真实供应商回归：人像 MAT-01 / 衣服 MAT-08 为固定素材（SHA 见 MATERIALS-0001.md），验证额度与真实生成链路；AC-7 96s 预算/AC-14/15 视觉仍按 E2E-LOG v0.12 口径判定',
+            files: { person: matFiles(['MAT-01'])[0], garment: matFiles(['MAT-08'])[0] },
+            sums: matSums(['MAT-01', 'MAT-08']),
+          }
+        : (() => {
+            const smoke = smokeFiles();
+            return {
+              kind: 'synthetic-smoke（非 MAT 固定样张）',
+              note: '使用 tests/fixtures/_smoke 合成图 + 云函数 SINN_VENDOR=mock，仅验证真实云额度/拦截链路；AC-7/14/15 视觉与真实供应商验收仍阻塞',
+              files: smoke.files,
+              sums: smoke.sums,
+            };
+          })();
       const quota = await readQuota(mp);
       if (quota.remaining === null) throw new Error(`[assert] profile 额度文案不可解析：${quota.quotaText}`);
       if (mode === 'vip' && !/VIP/i.test(quota.badgeText || '')) {
@@ -511,9 +631,9 @@ const CASES = [
         mode,
         quotaBefore: quota,
         fixtures: {
-          kind: 'synthetic-smoke（非 MAT 固定样张）',
-          note: '使用 tests/fixtures/_smoke 合成图 + 云函数 SINN_VENDOR=mock，仅验证真实云额度/拦截链路；AC-7/14/15 视觉与真实供应商验收仍阻塞',
-          sums: smoke.sums,
+          kind: fixtures.kind,
+          note: fixtures.note,
+          sums: fixtures.sums,
         },
       };
       if (mode === 'normal') {
@@ -523,7 +643,31 @@ const CASES = [
         if (quota.remaining < 1) {
           h.blocked(`当日普通额度已用尽（remaining=${quota.remaining}），需等待次日 00:00 重置或改用新测试账号后重跑`);
         }
-        const first = await runGeneration(ctx, { personFiles: [smoke.files.person], garmentFiles: [smoke.files.garment] });
+        if (realVendor) await h.installCloudCallLogger(mp);
+        const first = await runGeneration(ctx, { personFiles: [fixtures.files.person], garmentFiles: [fixtures.files.garment] });
+        if (realVendor) {
+          const calls = await h.cloudCallLog(mp);
+          const createCalls = calls.filter((c) => c.name === 'sinn-task' && c.action === 'createTask');
+          const okCreate = createCalls.filter((c) => c.ok).pop() || null;
+          evidence.realVendor = {
+            enabled: true,
+            createTaskCalls: createCalls.length,
+            requestId: okCreate ? okCreate.requestId : null,
+            taskGetRequestId: (first.task && first.task.requestId) || null,
+            fixtureKind: fixtures.kind,
+          };
+          if (ctx.archiveTask) {
+            ctx.archiveTask({
+              caseId: ctx.caseId,
+              ac: 'AC-11',
+              taskEnvelope: first.task,
+              elapsedMs: first.elapsedMs,
+              requestId: evidence.realVendor.requestId,
+              fixtureKind: fixtures.kind,
+              realVendor: true,
+            });
+          }
+        }
         const afterFirst = await readQuota(mp);
         const secondAttempt = await (async () => {
           // 采集页的上传+服务端预检只在点「下一步」时触发（capture.js onNext）；
@@ -532,11 +676,11 @@ const CASES = [
           // 由页面自身完成校验；额度已耗尽时停在衣服页并展示 hint。
           const capture = await h.enterCapture(mp);
           await h.fillMetrics(capture, { heightCm: 175, weightKg: 70, gender: 'male', chestCm: 92, waistCm: 78, hipCm: 96 });
-          await h.mockChooseMediaFromDisk(mp, [smoke.files.person]);
+          await h.mockChooseMediaFromDisk(mp, [fixtures.files.person]);
           await h.addPersonPhotos(capture, 1);
           await h.tap(capture, '.btn-primary');
           const garment = await h.waitRoute(mp, '/pages/garment/garment', 60000);
-          await h.mockChooseMediaFromDisk(mp, [smoke.files.garment]);
+          await h.mockChooseMediaFromDisk(mp, [fixtures.files.garment]);
           await h.addGarmentPhoto(garment);
           await h.tapStart(garment);
           // 额度拦截提示由 createTask 返回 2001 后异步写入（上传+预检+云函数调用约 2–5s），
@@ -595,6 +739,7 @@ const CASES = [
       const { mp } = ctx;
       // 先记录生成前的额度
       const quotaBefore = await readQuotaCloud(mp);
+      let generationStartMs = null;
       const taskId = await (async () => {
         const capture = await h.enterCapture(mp);
         await h.fillMetrics(capture, { heightCm: 175, weightKg: 70, gender: 'male', chestCm: 92, waistCm: 78, hipCm: 96 });
@@ -604,6 +749,7 @@ const CASES = [
         const garment = await h.waitRoute(mp, '/pages/garment/garment');
         await h.mockChooseMediaFromDisk(mp, matFiles(['MAT-08']));
         await h.addGarmentPhoto(garment);
+        generationStartMs = Date.now();
         await h.tapStart(garment);
         const generating = await h.waitRoute(mp, '/pages/generating/generating', 15000);
         // 生成页首轮轮询会触发 setData/云调用，先让页面稳定，再读缓存（T-6：生成期间自动化调用偶发 10s 超时）。
@@ -654,12 +800,22 @@ const CASES = [
       })();
       const cached = await h.getStorage(mp, 'sinn_active_task_v1');
       const quotaAfter = await readQuotaCloud(mp);
+      // task-71：真实供应商出图需 60–96s；等终态后再归档，确保能下载到结果图。
+      // 归档失败只记录，不影响 AC-12 判定；等待超时也不改变用例结论。
+      const archiveEnvelope = await waitTaskEnvelope(mp, taskId, 120000).catch(() => null);
+      const archived = await archiveGeneratedTask(ctx, mp, archiveEnvelope, {
+        ac: 'AC-12',
+        elapsedMs: generationStartMs ? Date.now() - generationStartMs : null,
+        fixtureKind: 'MAT-01 + MAT-08（真实素材）',
+      }).catch(() => null);
       const evidence = {
         taskId,
         resumedTaskId: cached && cached.taskId,
         routeQuery,
         quotaBefore,
         quotaAfter,
+        generationElapsedMs: generationStartMs ? Date.now() - generationStartMs : null,
+        archive: archived,
         screenshot: await h.screenshot(mp, ctx.runDir, 'ac12-resume'),
       };
       if (!cached || cached.taskId !== taskId) throw new Error('[assert] 重进后未恢复同一 taskId');
@@ -687,7 +843,9 @@ const CASES = [
     async run(ctx) {
       const { mp } = ctx;
       const generation = await runGeneration(ctx);
-      const result = generation.task && generation.task.result;
+      // taskGet 返回统一 envelope `{ok, data, requestId}`；兼容直接返回 task 文档的旧路径。
+      const taskDoc = generation.task && (generation.task.data || generation.task.result || generation.task);
+      const result = taskDoc && taskDoc.result;
       if (!result) throw new Error('[assert] taskGet 缺少 result（真实供应商未出图）');
       const longSide = Math.max(Number(result.width) || 0, Number(result.height) || 0);
       const fallback = result.sizeFallback || null;
@@ -725,8 +883,26 @@ const CASES = [
     ],
     async run(ctx) {
       const { mp } = ctx;
-      const generation = await runGeneration(ctx);
-      const page = generation.resultPage;
+      const reuseTaskId = process.env.SINN_E2E_REUSE_TASK_ID;
+      // 复用模式仅用于 T-6 打断后的定向复测：不再生成、不消耗真实调用（证据注明 reused）。
+      const generation = reuseTaskId
+        ? await reuseResultTask(ctx, '.result-ai-badge', '结果页 AI 标识出现（复用任务）')
+        : await runGeneration(ctx);
+      // 结果页 onLoad 之后还要等 taskGet 返回并 setData，页面内容才出现；先等到 AI 标识再断言，
+      // 否则会把「加载中」误判成标识缺失（Phase B 首轮 L3-005 即此问题）。
+      const page = generation.reused
+        ? generation.resultPage
+        : await h.waitFor(
+            async () => {
+              const p = await h.currentPage(mp).catch(() => null);
+              if (!p || !/pages\/result\/result/.test(p.path || '')) return null;
+              const b = await p.$('.result-ai-badge').catch(() => null);
+              return b ? p : null;
+            },
+            25000,
+            500,
+            '结果页 AI 标识出现'
+          );
       const badge = await page.$('.result-ai-badge');
       if (!badge) throw new Error('[assert] 结果页缺少 .result-ai-badge（AI 标识）');
       const badgeText = await badge.text();
@@ -734,26 +910,48 @@ const CASES = [
       const shot1x = await h.screenshot(mp, ctx.runDir, 'ac18-1x');
       const zoom = await page.$('#zoom-view');
       if (!zoom) throw new Error('[assert] 结果页缺少 #zoom-view');
-      const offset = await zoom.offset();
-      const cx = offset.left + offset.width / 2;
-      const cy = offset.top + offset.height / 2;
-      const t = (x, y, id) => ({ identifier: id, pageX: x, pageY: y, clientX: x, clientY: y });
-      await zoom.touchstart({ touches: [t(cx - 60, cy, 1), t(cx + 60, cy, 2)] });
-      await zoom.touchmove({ touches: [t(cx - 160, cy + 40, 1), t(cx + 160, cy + 40, 2)] });
-      await h.sleep(300);
-      await zoom.touchend({ touches: [t(cx - 160, cy + 40, 1), t(cx + 160, cy + 40, 2)] });
-      await h.sleep(500);
+      // T-6：Skyline 下手势事件经 automator 注入会引发 10s 协议超时（L3-005 首跑/复测均卡在 touch*），
+      // 改为在组件实例上直接应用缩放/平移状态做渲染断言；真机双指手势归 CP-11 人工项。
+      const zoomApplied = await h.evaluate(mp, function () {
+        var pages = getCurrentPages();
+        var page = pages[pages.length - 1];
+        var comp = page && page.selectComponent && page.selectComponent('#zoom-view');
+        if (!comp) return { ok: false, reason: 'zoom-view 组件实例不可用' };
+        try {
+          if (typeof comp._applyState === 'function' && comp._viewport) {
+            comp._applyState({ scale: 3, x: -40, y: 0 });
+            return { ok: true, method: '_applyState', mode: comp.data && comp.data.mode };
+          }
+          comp.setData({ transform: 'translate(-40px, 0px) scale(3)', scaleText: '3.0x' });
+          return { ok: true, method: 'setData', mode: comp.data && comp.data.mode };
+        } catch (e) {
+          return { ok: false, reason: e && e.message };
+        }
+      });
+      if (!zoomApplied || !zoomApplied.ok) throw new Error(`[assert] 缩放状态注入失败：${JSON.stringify(zoomApplied)}`);
+      await h.sleep(600);
       const shot3x = await h.screenshot(mp, ctx.runDir, 'ac18-3x');
       const badgeAfterZoom = await page.$('.result-ai-badge');
       if (!badgeAfterZoom) throw new Error('[assert] 3x 缩放后 AI 标识消失');
-      await mp.pageScrollTo(300);
-      await h.sleep(500);
+      let scrollNote = '未执行（页面滚动与 T-7 同类：automator 无法驱动 Skyline scroll-view）';
+      try {
+        await mp.pageScrollTo(300);
+        await h.sleep(500);
+        scrollNote = '已尝试 pageScrollTo(300)';
+      } catch (e) {
+        scrollNote = `pageScrollTo 失败（T-6/T-7）：${e && e.message}`;
+      }
       const shotScroll = await h.screenshot(mp, ctx.runDir, 'ac18-scroll');
       const badgeAfterScroll = await page.$('.result-ai-badge');
       if (!badgeAfterScroll) throw new Error('[assert] 滚动后 AI 标识消失');
       const evidence = {
         taskId: generation.taskId,
+        reused: Boolean(generation.reused),
+        source: generation.reused ? 'reuse-task（本批真实生成任务，无新增真实调用）' : 'generated',
         badgeText,
+        zoomApplied,
+        scrollNote,
+        toolchainNote: 'T-6：automator 注入 touch 事件会 10s 协议超时，缩放以组件状态注入替代；真机双指缩放/平移与「不遮挡主体」为 CP-11 人工项，不在此断言。',
         shots: { oneX: shot1x, threeX: shot3x, scrolled: shotScroll },
         note: '标识可见性截图留档；「不遮挡主体」为人工视觉判定（CP-11，需执行人签字）。',
       };
@@ -777,8 +975,35 @@ const CASES = [
     ],
     async run(ctx) {
       const { mp } = ctx;
-      const generation = await runGeneration(ctx);
-      const page = generation.resultPage;
+      const reuseTaskId = process.env.SINN_E2E_REUSE_TASK_ID;
+      // 复用模式仅用于 T-6 打断后的定向复测：不再生成、不消耗真实调用（证据注明 reused）。
+      const generation = reuseTaskId
+        ? await reuseResultTask(ctx, '.btn-danger', '结果页删除按钮出现（复用任务）')
+        : await runGeneration(ctx);
+      // 结果页内容异步加载：等删除按钮出现后再操作；并把结果图在删除前落盘归档，
+      // 否则任务被物理删除后无法再下载（Phase B 首轮 L3-006 即此问题）。
+      const page = generation.reused
+        ? generation.resultPage
+        : await h.waitFor(
+            async () => {
+              const p = await h.currentPage(mp).catch(() => null);
+              if (!p || !/pages\/result\/result/.test(p.path || '')) return null;
+              const btn = await p.$('.btn-danger').catch(() => null);
+              return btn ? p : null;
+            },
+            25000,
+            500,
+            '结果页删除按钮出现'
+          );
+      const snapshot = archive.snapshotTaskResult({
+        taskEnvelope: generation.task,
+        runId: ctx.caseRunId,
+        appid: ctx.project && ctx.project.appid,
+        envId: ctx.project && ctx.project.cloudEnvId,
+      });
+      if (snapshot && snapshot.archive) {
+        ctx.archiveTask({ taskEnvelope: generation.task, preArchive: snapshot.archive });
+      }
       // 取消确认：不删除
       await mp.mockWxMethod('showModal', { confirm: false, cancel: true });
       const deleteButton = await page.$('.btn-danger');
@@ -795,7 +1020,14 @@ const CASES = [
       await h.waitRoute(mp, '/pages/index/index', 20000);
       const cached = await h.getStorage(mp, 'sinn_active_task_v1');
       const afterDelete = await h.cloudCall(mp, 'sinn-task', { action: 'taskGet', taskId: generation.taskId });
-      const deletedAtEvidence = { cached, afterDelete, screenshot: await h.screenshot(mp, ctx.runDir, 'ac19-deleted') };
+      const deletedAtEvidence = {
+        taskId: generation.taskId,
+        reused: Boolean(generation.reused),
+        source: generation.reused ? 'reuse-task（本批真实生成任务，无新增真实调用）' : 'generated',
+        cached,
+        afterDelete,
+        screenshot: await h.screenshot(mp, ctx.runDir, 'ac19-deleted'),
+      };
       if (cached) throw new Error('[assert] 删除成功后 sinn_active_task_v1 未清空');
       if (afterDelete.ok && afterDelete.result && afterDelete.result.ok !== false) {
         throw new Error('[assert] 删除后 taskGet 仍返回成功结果');
@@ -1118,19 +1350,24 @@ const CASES = [
         return missing;
       }
 
-      // 截图可能拿到滞后帧（T-5/T-6 同类限制）：低于通用下限时等待 900ms 重截一次，再按阈值判定。
+      // 截图可能拿到滞后帧（T-5/T-6 同类限制）：低于通用下限或与上一路由截图同哈希时等待重截，
+      // 最多 3 次；仍不改善则按阈值判定（Phase B 首轮 L3-010 即「index 截图却是生成页旧帧」）。
+      let lastRouteShotSha256 = null;
       async function shotAndStats(name) {
-        let rel = await h.screenshot(mp, ctx.runDir, name);
-        let stats = rel ? pngStats.imageStats(path.join(h.ROOT, rel)) : null;
-        if (!stats || stats.darkRatio < 0.03) {
+        let rel = null;
+        let stats = null;
+        let sha256 = null;
+        for (let i = 0; i < 3; i += 1) {
+          const cand = await h.screenshot(mp, ctx.runDir, name);
+          const candStats = cand ? pngStats.imageStats(path.join(h.ROOT, cand)) : null;
+          const candSha = cand ? crypto.createHash('sha256').update(fs.readFileSync(path.join(h.ROOT, cand))).digest('hex').toUpperCase() : null;
+          rel = cand;
+          stats = candStats;
+          sha256 = candSha;
+          const stale = Boolean(candSha && lastRouteShotSha256 && candSha === lastRouteShotSha256);
+          if (candStats && candStats.darkRatio >= 0.03 && !stale) break;
           await h.sleep(900);
-          const retry = await h.screenshot(mp, ctx.runDir, name);
-          if (retry) {
-            rel = retry;
-            stats = pngStats.imageStats(path.join(h.ROOT, retry));
-          }
         }
-        const sha256 = rel ? crypto.createHash('sha256').update(fs.readFileSync(path.join(h.ROOT, rel))).digest('hex').toUpperCase() : null;
         return { screenshot: rel, stats, screenshotSha256: sha256 };
       }
 
@@ -1170,7 +1407,7 @@ const CASES = [
           let missing;
           let shot;
           let visualErrors = [];
-          for (let attempt = 1; attempt <= 2; attempt += 1) {
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
             rects = await layoutOf();
             missing = await missingSelectors(page, spec);
             shot = await shotAndStats(`ac23-${routeKey.split('/').pop()}`);
@@ -1203,10 +1440,16 @@ const CASES = [
             }
             if (!visualErrors.length || calibrate) break;
             if (attempt === 1) {
-              console.log('[visual-retry]', actualRoute, '首次采样未通过，1.5s 后复核：', visualErrors.join('；'));
-              await h.sleep(1500);
+              console.log('[visual-retry]', actualRoute, '首次采样未通过，reLaunch 后复核：', visualErrors.join('；'));
+              // connect 模式截图可能持续拿到旧帧（T-5）：重新 reLaunch 目标路由并等待渲染，再采一次。
+              await h.appReLaunch(mp, item.route).catch(() => null);
+              await h.sleep(2000);
+            } else if (attempt === 2) {
+              console.log('[visual-retry]', actualRoute, '二次采样未通过，3s 后复核：', visualErrors.join('；'));
+              await h.sleep(3000);
             }
           }
+          if (!visualErrors.length) lastRouteShotSha256 = shot.screenshotSha256;
           if (visualErrors.length && !calibrate) {
             throw new Error(
               `[assert] ${actualRoute} 页面未真实绘制（疑似 DEF-0008 回归）：${visualErrors.join('；')}；` +

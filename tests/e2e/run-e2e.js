@@ -22,6 +22,7 @@
 const fs = require('fs');
 const path = require('path');
 const env = require('./lib/env');
+const archive = require('./lib/archive');
 
 const CASE_TIMEOUT_MS = Number(process.env.SINN_E2E_CASE_TIMEOUT_MS || 300000);
 
@@ -266,6 +267,35 @@ async function main() {
   ensureDir(runDir);
   const runStartedAt = new Date().toISOString();
   const rows = [];
+  /** task-71：本轮真实生成任务，用例通过 ctx.archiveTask 追加；每条用例跑完立即增量归档到 evidence/ */
+  const archiveTasks = [];
+  let archiveResult = null;
+  let archivedEntries = [];
+  let lastArchivedCount = 0;
+  /**
+   * 逐用例即时归档：L3-011 撤回同意会删除该用户全部云端任务/结果（BR-8），L3-006 会物理删除任务，
+   * 因此不能等批次结束再下载；每跑完一条就把新增任务落盘，已下载的条目经 known 复用、不重复下载。
+   */
+  function archiveIncrement() {
+    if (!archiveTasks.length || archiveTasks.length === lastArchivedCount) return;
+    try {
+      archiveResult = archive.finalize({
+        runId,
+        runDir,
+        tasks: archiveTasks,
+        known: archivedEntries,
+        appid: detection.project.appid,
+        envId: detection.project.cloudEnvId,
+      });
+      archivedEntries = archiveResult.tasks;
+      lastArchivedCount = archiveTasks.length;
+      console.log(
+        `[archive] 增量归档：任务 ${archiveResult.totals.tasks} / 已下载 ${archiveResult.totals.downloaded} / 待归档 ${archiveResult.totals.pending} / 真实调用 ${archiveResult.totals.realCalls} / ¥${archiveResult.totals.costEstimateCny}`
+      );
+    } catch (e) {
+      console.error(`[WARN] 增量归档失败：${e && (e.stack || e.message || e)}`);
+    }
+  }
 
   // ---- 环境不可连接：不尝试 launch，全部记阻塞（不得记通过）
   if (!detection.ready) {
@@ -347,7 +377,14 @@ async function main() {
               mp: launched.mp,
               env: detection,
               caseId: c.id,
+              caseAc: c.ac,
+              caseRunId: runId,
+              project: detection.project,
               runDir: caseDir,
+              /** task-71：把真实生成任务登记到本轮归档队列（runner 结束时统一下载结果图并写 manifest）。 */
+              archiveTask(entry) {
+                if (entry && entry.taskEnvelope) archiveTasks.push(entry);
+              },
               write(name, data) {
                 const file = path.join(caseDir, /\.json$/i.test(name) ? name : `${name}.json`);
                 writeJson(file, data);
@@ -381,8 +418,21 @@ async function main() {
             rows.push(row);
             writeJson(path.join(caseDir, 'result.json'), row);
             console.log(`[${row.status}] ${row.id} (${row.ac}) ${row.status === '通过' ? '' : '— ' + (row.reason || row.error || '').split('\n')[0]}`);
+            // task-71：逐用例即时归档（避免后续删除/撤回同意清空云端数据导致结果图丢失）。
+            archiveIncrement();
           }
           await h.close(launched.mp, launched.info);
+          // ---- task-71：收尾再归档一次（幂等；逐用例已在每条用例结束时增量归档）
+          archiveIncrement();
+          if (archiveResult) {
+            console.log('');
+            console.log('===== 真实结果归档 =====');
+            console.log(
+              `任务 ${archiveResult.totals.tasks} / 已下载 ${archiveResult.totals.downloaded} / 待归档 ${archiveResult.totals.pending} / 真实调用 ${archiveResult.totals.realCalls} 次 / 预估成本 ¥${archiveResult.totals.costEstimateCny}`
+            );
+            console.log(`real-tasks: ${rel(archiveResult.realTasksPath)}`);
+            console.log(`manifest  : ${rel(archiveResult.manifestPath)}`);
+          }
         }
       }
     }
@@ -421,6 +471,14 @@ async function main() {
     pass,
     fail,
     blocked,
+    archive: archiveResult
+      ? {
+          realTasksPath: rel(archiveResult.realTasksPath),
+          manifestPath: rel(archiveResult.manifestPath),
+          archiveDir: rel(archiveResult.outDir),
+          totals: archiveResult.totals,
+        }
+      : null,
     conclusion:
       fail > 0 ? '存在失败' : blocked > 0 ? '存在阻塞（未通过）' : '全部通过',
     cases: rows,
