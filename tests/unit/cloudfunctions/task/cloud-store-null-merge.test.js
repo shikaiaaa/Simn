@@ -2,7 +2,7 @@
  * tests/unit/cloudfunctions/task/cloud-store-null-merge.test.js
  * task-37：cloud 数据库 update 深合并进 null 导致 -502001 的回归测试。
  *
- * 真实云行为（QA precheckDebug 实测）：
+ * 真实云行为（QA 2026-11-10 真实云 precheck 实测）：
  *   document.update:fail -502001 database request fail. [FailedOperation]
  *   multiple write errors: [{write errors: [{Cannot create field 'at' in element {precheck: null}}]}, {<nil>}]
  *
