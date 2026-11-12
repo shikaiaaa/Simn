@@ -1,0 +1,37 @@
+﻿# Sinn 本地备份清单（BACKUP-MANIFEST）
+
+生成时间：2026-11-12 21:37:33 +08:00
+源仓库：C:\Users\admin\WeChatProjects\Sinn
+源 HEAD：df2982b9ddf2ac75d4079a4c40ec5c8827f7fc37
+备份目录：C:\Users\admin\Desktop\Sinn-BACKUP-2026-11-12
+备份文件数：约 925（不含本清单自身）；备份总大小：约 46.5 MB
+
+## 目录体积
+docs: 6.4 MB
+evidence: 31.7 MB
+tests (不含 e2e/results): 3.1 MB
+cloudfunctions: 0.2 MB
+miniprogram: 0.2 MB
+.git: 4.7 MB
+
+## 排除项（可再生/临时，不影响接手）
+- node_modules/：npm install 重建
+- tests/e2e/results/：约 78MB 本机 e2e 运行产物（精选证据已在 evidence/）
+- .npm-cache/、.deploy/、.tmp-*、*.log
+
+## 校验值
+HANDOFF-2026-11-12.md SHA256 = 4086B0EB9A9CEF624018EBAB2256234B2C8A2D201E125C249D2E813FF8BE0AE1
+备份内 git HEAD（git -C <backup> rev-parse HEAD）= df2982b9ddf2ac75d4079a4c40ec5c8827f7fc37
+
+## 恢复步骤
+1. 把本目录内容复制回 C:\Users\admin\WeChatProjects\Sinn（保留 .git）。
+2. 在仓库根执行 npm install（node_modules 未备份）。
+3. 运行双门禁与单测：
+   powershell -NoProfile -ExecutionPolicy Bypass -File tools\check-gates.ps1 -Root .
+   powershell -NoProfile -ExecutionPolicy Bypass -File tools\check-wxapp.ps1 -Root .
+   node node_modules/jest/bin/jest.js --runInBand
+4. 先读 HANDOFF-2026-11-12.md，按其中 §9「下次会话启动清单」接手（第一步是找用户拍板 P2 方向）。
+
+## 敏感信息
+本备份不含任何 API Key / AK/SK；tripo.key 只在 C:\Users\admin\.sinn-secrets\（未备份）。
+
