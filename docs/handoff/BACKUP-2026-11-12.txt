@@ -2,7 +2,7 @@
 
 生成时间：2026-11-12 21:37:33 +08:00
 源仓库：C:\Users\admin\WeChatProjects\Sinn
-源 HEAD：df2982b9ddf2ac75d4079a4c40ec5c8827f7fc37
+源 HEAD（生成时；以 git log -1 为准）：df2982b9（冻结存档）→ 9838b2a（收尾）→ 894e513（区间标注）
 备份目录：C:\Users\admin\Desktop\Sinn-BACKUP-2026-11-12
 备份文件数：约 925（不含本清单自身）；备份总大小：约 46.5 MB
 
