@@ -1,0 +1,13 @@
+{
+  "name": "sinn-model3d",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sinn 3D model generation cloud function (SPEC-0002 API-02-01..05)",
+  "main": "index.js",
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

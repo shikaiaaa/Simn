@@ -1,0 +1,80 @@
+﻿id	status	owner	subject
+task-1	completed	sa	SA 需求调研：产出 docs/sa/REQ-0001.md（P1 2D 试穿）
+task-2	completed	sa	SA：REQ-0001 升 v0.2（19 条待确认闭环 + demo 定位）并置 approved
+task-3	completed	se	SE：产出 SPEC-0001（含小程序增补六节）+ TASKS-0001.json，交用户评审
+task-4	completed	sa	SA：REQ-0001 v0.3 —— 性别选填（GB/T 1335 双表）+ 删除不留墓碑
+task-5	completed	se	SE：SPEC-0001 v0.2 对齐 REQ v0.3（性别双表 / 物理全删）+ 置 approved
+task-6	completed	dev	DEV-0001-01 SPIKE：skyline 缩放 / 云开发可用性 / 试穿 API 选型 / 60s 与 2048px / 预检能力
+task-7	completed	dev	DEV-0001-02 工程骨架与路由：app.json 7 页注册、统一调用层、首页
+task-8	completed	dev	DEV-0001-03 云函数 sinn-task：任务状态机/预检/额度/参考尺码/供应商契约抽象与契约桩
+task-9	completed	dev	DEV-0001-04 云函数 sinn-account + sinn-cleanup：额度/同意/删除全部/24h 物理清理
+task-10	completed	dev	DEV-0001-05 合规门禁页 consent：18+ 声明 + 隐私单独同意 + 拒绝降级
+task-11	completed	dev	DEV-0001-06 采集链路：capture 人像/数值/性别 + garment 衣服 + L0 与服务端预检接入
+task-12	completed	dev	DEV-0001-07 生成中页 generating：轮询、阶段进度、超时、失败分类、恢复与取消
+task-13	completed	dev	DEV-0001-08 结果页 result：1x–3x 缩放组件、AI 标识、参考尺码、删除本次
+task-14	completed	dev	DEV-0001-09 我的页 profile：额度/VIP、删除全部、撤回同意
+task-15	completed	dev	DEV-0001-10 集成自检、包体积实测与 DEV 交接
+task-16	completed	se	SE：SPEC-0001 v0.3 回填 SPIKE-0001 技术结论（D-3 改 S2+ 主/S2 兜底、D-2 候选与契约基线、§D 体积基线、TASKS 同步）
+task-17	completed	se	SE：SPEC-0001 v0.4 更新 §D 包体积预算（实测 173.9KB）
+task-18	completed	qa	QA-0001-01：TC-0001 测试用例设计（AC-1..AC-26 全量映射 + 环境依赖标注）
+task-19	completed	qa	QA-0001-02：L3 e2e（miniprogram-automator）脚本与执行/阻塞记录
+task-20	completed	qa	QA-0001-03：执行测试并产出 REPORT-0001（AC 逐条结论 + 阻塞清单）
+task-21	completed	qa	QA-0001-04：RELEASE-CHECKLIST 复核与人工签字项登记
+task-22	completed	dev	DEV：接入云开发 envId（simn-01-d5gjsxm0ocb78add8）+ 部署 3 个云函数（CP-02 解锁第一步）
+task-23	completed	sa	SA：REQ-0001 v0.4 —— 试穿 API 供应商定稿为火山引擎「图片换装 V2」（境内接收方口径）
+task-24	completed	se	SE：SPEC-0001 v0.5 —— 供应商定稿火山引擎「图片换装 V2」+ VendorAdapter 契约细化
+task-25	completed	dev	DEV：实现火山引擎「图片换装 V2」VendorAdapter（SINN_VENDOR=volcengine，默认仍 mock）
+task-26	completed	dev	DEV：部署 3 个云函数到 simn-01 环境并验证（CP-02）
+task-27	completed	dev	DEV：正式 AppID 后重跑 3 云函数部署 + 线上 mock 自检（CP-02）
+task-28	completed	dev	DEV：sinn-task 增加受保护 selftest 自检 action + 重新部署（一键验证云开发数据链路）
+task-29	completed	dev	DEV-0001-29 云函数 bootstrap：自动建集合 + 可编程自检门禁 + 重新部署
+task-30	completed	dev	DEV-0001-30 修复云数据库写入 `_id` 导致 profile 失败并重部署
+task-31	completed	dev	DEV-0001-31 回填 CP-02 数据链路实测证据并更新 DEV-0001
+task-32	completed	qa	QA-0001-02（v0.2）用 automator connect 模式重跑 12 条 L3 e2e 并更新 E2E-LOG
+task-33	completed	qa	QA-0001-03（v0.2）更新 REPORT-0001（真实云 + e2e 新证据）
+task-34	completed	se	SE SPEC-0001 v0.6 同步 CP-02 实测状态与卡点表
+task-35	completed	dev	DEV：修复真实云 precheck 返回 E_INTERNAL 9000（云写 undefined 字段）
+task-36	completed	dev	DEV：加受保护 precheckDebug 诊断动作（定位 precheck 9000 真实原因）
+task-37	completed	dev	DEV：修复 precheck 写库 -502001 根因（precheck:null 深合并失败）
+task-38	completed	dev	DEV：修复 mock vendor 跨 invocation 状态丢失（E2E-B10）
+task-39	completed	dev	DEV-0001-39：给 sinn-task 加受保护的 cleanup 触发器诊断动作（seed/status）并验证 10 分钟定时器
+task-40	completed	dev	DEV-0001-40：sinn-task 增加受保护的 quotaReset 调试动作（仅调用者本人）并重部署
+task-41	completed	dev	DEV-0001-41：回填 CP-02 收尾证据（定时触发器创建+实测、Timeout/MemorySize 回读）
+task-42	completed	se	SPEC-0001 v0.7：§G 将 CP-02 更新为「已完全闭合（触发器+超时/内存实测）」
+task-43	completed	qa	QA 收尾：REPORT-0001 v0.2 置 approved + RELEASE-CHECKLIST v0.4 + 双门禁 WARN 清零
+task-44	completed	dev	DEV-0001-42 收尾：移除 sinn-task 全部调试入口并重部署（上线前必做）
+task-45	completed	qa	QA 收尾：e2e 夹具随调试入口移除而调整（E2E-LOG v0.4）
+task-46	completed	qa	QA-0001-05 素材固化：MAT-01..08 + L3-003 复跑（E2E-LOG v0.5）
+task-47	completed	qa	QA-0001-06 REPORT v0.3：SEC-01 关闭 + 素材解锁 + L3-003/AC-12 通过
+task-48	completed	qa	QA-0001-07 修复 e2e MAT 素材映射并复跑 L3-003
+task-49	completed	dev	DEV 修复 Skyline 下 scroll-view 页面空白（DEF-0008）+ 7 页截图证明
+task-50	completed	qa	QA 给 L3-010 增加「页面渲染可见」断言并记录 DEF-0008（REPORT v0.4）
+task-51	completed	sa	SA：REQ-0001 v0.5 —— 上传照片自动适配（超 4096 自动压缩，不再拒绝）
+task-52	completed	se	SE：SPEC-0001 v0.8 + TASKS 同步 —— 上传照片自动适配（AC-27 / BR-12）
+task-53	completed	dev	DEV：上传照片自动适配（两级压缩 + 提示 + AC-27 单测）
+task-54	completed	dev	DEV：修复 DEF-0009 —— result/profile/generating 三页无法滚动（真机反馈）
+task-55	completed	qa	QA：DEF-0009 滚动回归 + L3 滚动可达断言 + REPORT v0.5
+task-56	completed	dev	DEV：对接真实火山引擎「图片换装 V2」（替换 mock 白图，V4 签名 + 真实调用验证）
+task-57	completed	dev	task-57 DEV：任务超时支持环境变量覆写（真实供应商时延验证）
+task-58	completed	dev	task-58 DEV：DEV-0001 回填真实火山换装首次成功证据（§48）
+task-59	completed	sa	task-59 SA：REQ v0.6 端到端出图预算 60s→96s（真实供应商实测）
+task-60	completed	se	task-60 SE：SPEC v0.9 端到端 96s（服务端阈值 96s / 端上 101s 硬上限 / AC-7 计时埋点）
+task-61	completed	dev	task-61 DEV：96s 端到端（服务端阈值 96s / 端上 60s 提示 + 101s 兜底 / AC-7 埋点）
+task-62	completed	sa	SA: REQ v0.7 增加「低版本微信兜底」口径与 AC-28
+task-63	completed	se	SE: SPEC v0.10 低版本微信兜底方案（skyline 保留）
+task-64	completed	dev	DEV: 低版本微信兜底（原生升级提示，不白屏）
+task-65	completed	qa	QA: 低版本兜底用例与 REPORT v0.6（DEF-0010）
+task-66	completed	dev	DEV-0001-12 临时诊断动作 diag（vendor health + 环境变量存在性）定位真实调用 5001
+task-67	completed	sa	SA: REQ v0.8 — 对齐火山输入规格（≤5MB/≤4096）+ 新增 AC-29（真机 5001 复盘）
+task-68	completed	se	SE: SPEC v0.11 — 端上压缩规格对齐（≤5MB/≤4096）+ 服务端 3015 防御 + 供应商错误映射
+task-69	completed	dev	DEV: BR-14/AC-29 — 端上压缩对齐供应商 ≤5MB/≤4096 + 服务端 3015 防御 + 供应商参数错误映射
+task-70	completed	qa	QA: AC-29 压缩规格用例（L3-014 + 文档）与回归
+task-71	completed	qa	QA: 真实供应商常态化回归（不切 mock）+ AI 换装结果本地归档
+task-72	completed	sa	SA：P2 二期需求调研，产出 docs/sa/REQ-0002.md（轻量 3D 形象 + P1.1 2D 品类 + 历史形象库 + 保存分享）
+task-73	completed	se	SE-0002：P2 二期 SPEC-0002 + TASKS-0002（3D 形象 + P1.1 品类）
+task-74	completed	dev	DEV-0002-01 SPIKE-0002：3D 渲染可行性 + 阿里云百炼 Tripo 实测 + AC-25 阈值标定
+task-75	completed	se	SE-0002 回填：SPEC-0002 v0.4（SPIKE 实测 D-1/D-3/§D + AC-25 卡点 CP-02-16）
+task-76	completed	dev	DEV-0002-03 3D 任务服务端：sinn-model3d（API-02-01..05 + Model3dVendorAdapter + 300s + ≤45MB + cleanup）
+task-77	pending		SPIKE-0002B：五官关键点模型可行性 + AC-25 第三项指标口径与阈值
+task-78	completed	dev	SPIKE-0002C：Tripo 高档参数质量对比（ultra+4K / ultra+8K，≤¥12）
+task-79	in_progress	dev	SPIKE-0002D：Decart Lucy VTON 单条样片（5s 视频，≤$0.25）与接入可行性

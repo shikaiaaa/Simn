@@ -1,0 +1,278 @@
+{
+  "spec": "SPEC-0002",
+  "requirement": "REQ-0002",
+  "tasks": [
+    {
+      "id": "DEV-0002-01",
+      "role": "dev",
+      "title": "SPIKE-0002：3D 渲染可行性 + 3D 生成 API 选型 + AC-25 标定",
+      "dependsOn": [],
+      "writeScopes": [
+        "docs/dev/SPIKE-0002.md",
+        "docs/dev/spike-verify-3d/",
+        "miniprogram/pages/spike-3d/",
+        "cloudfunctions/spike-model3d/"
+      ],
+      "acceptance": [
+        "（已完成 2026-11-12：SPIKE-0002 已交付，结论见 docs/dev/SPIKE-0002.md；候选 A 2 次真实调用成功，候选 B 待 CP-02-01；AC-25 关键点缺口见 CP-02-16）产出 docs/dev/SPIKE-0002.md（status: review、owner: dev、upstream: [SPEC-0002]），含可复现证据与结论，不得只留对话",
+        "3D 渲染 spike：在 skyline + glass-easel 下验证 xr-frame 与 three.js 两条路线（查看页 renderer:webview 方案与分包按需加载方案），产出真机/开发者工具矩阵结果：可加载 GLB、可旋转、纹理正确、首屏与内存数据；不可用的方案须写明证据与降级路径（回 D-1 判定标准）",
+        "渲染能力探测：给出 miniprogram/utils/render-capability.js 的 canIUse/能力判定建议（xr-frame、WebGL、基础库门槛），以及不可用时的入口降级方案（提示升级/切 2D）",
+        "3D 生成 API 选型 spike：用 Pexels 真实照片 MAT-01/MAT-02 实测候选 A 阿里云百炼 Tripo 与候选 B 腾讯混元生3D（候选 C 火山方舟可开通也跑），记录输入要求、输出格式（是否可直接加载 GLB/glTF + 纹理）、单次生成耗时 P50/P95、credits 消耗与折算成本、失败率与失败码映射、task_id/结果 URL 有效期、境内可访问性与合规约束",
+        "AC-25 标定：用上述真实照片生成的模型计算五官关键点归一化位移、肤色 ΔE、发型轮廓 IoU 三项指标基线，给出阈值建议并回填 SPEC-0002 的 D-6 与 AC-25 行；人工 5 级制评分流程与验收人确定",
+        "包体积 spike：xr-frame 内置是否 0KB、three.js 按需加载增量、GLB 与纹理示例体积，写入 SPEC-0002 §D 与 SPIKE 结论，供主包/分包预算回填",
+        "SPIKE 结论必须明确：3D 渲染可行方案（主/备）、3D 生成候选对比结论（不承诺供应商，给出推荐与理由）、AC-25 阈值建议、仍未闭合的 CP（CP-02-01/02/06 等）；临时页 pages/spike-3d/ 与临时云函数 cloudfunctions/spike-model3d/ 在 spike 完成后移除，app.json 还原"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "DEV-0002-02",
+      "role": "dev",
+      "title": "3D 端上工程骨架与生成流程（分包注册、生成页、恢复入口）",
+      "dependsOn": [
+        "DEV-0002-01"
+      ],
+      "writeScopes": [
+        "miniprogram/app.json",
+        "miniprogram/pages/model3d-create/",
+        "miniprogram/services/model3d.js",
+        "miniprogram/utils/render-capability.js",
+        "tests/unit/services/",
+        "tests/unit/pages/model3d-create/"
+      ],
+      "acceptance": [
+        "app.json 注册 package-3d 分包（root、pages 三页）与 3D 入口，页面/分包/目录齐备；check-wxapp.ps1 FAIL=0；P1 的 7 页与 skyline 配置不被破坏",
+        "pages/model3d-create 四件套：采集/上传（复用 P1 services/upload.js 与 compressToVendorSpec）、创建 3D 任务、阶段进度与预计剩余、失败/超时分类与重试、离开再回按 taskId 恢复同一任务；重复点击不重复建任务",
+        "services/model3d.js 封装（按 SPEC-0002 §B.2）：submit/Get/List/Delete/DeleteAll 调用、统一 envelope 解包、6001–6006 错误码映射、分页 limit 20 + cursor；Mock 模式下可完整走通",
+        "services/model3d.js 幂等：clientReqId=UUIDv4，超时重试复用同一 clientReqId；同用户并发 1（E_ACTIVE_TASK_EXISTS 返回 existingTaskId 时跳转恢复）",
+        "渲染能力探测 utils/render-capability.js：判定 3D 可用/不可用，不可用时 3D 入口降级提示、不初始化渲染",
+        "L1 单测覆盖：spike 依赖分支、创建成功/失败/超时、恢复、幂等、6001–6006 映射；wx.* 走 tests/mocks/wx.js，不依赖开发者工具"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "DEV-0002-03",
+      "role": "dev",
+      "title": "3D 任务服务端：sinn-model3d 云函数、供应商适配器、300s 超时与清理",
+      "dependsOn": [
+        "DEV-0002-01"
+      ],
+      "writeScopes": [
+        "cloudfunctions/sinn-model3d/",
+        "cloudfunctions/sinn-cleanup/",
+        "tests/unit/cloudfunctions/model3d/"
+      ],
+      "acceptance": [
+        "cloudfunctions/sinn-model3d 支持 API-02-01..05（submit/get/list/delete/deleteAll，action 路由），统一 {ok,data,error{code,name,message,hint,httpStatus},requestId,serverTime} envelope；openid 来自 getWXContext，写接口校验有效同意记录（3D 披露节版本）",
+        "Model3dVendorAdapter 契约：submit→vendorJobId、query→PENDING/RUNNING/SUCCEEDED/FAILED 映射、fetchAsset→下载结果转存云存储（URL 过期→重新 query 取新 URL）、health；MockModel3dVendorAdapter 默认，SINN_VENDOR_3D 枚举可切换；契约一致性测试覆盖成功/失败/超时/URL 过期/损坏模型",
+        "长任务：服务端默认 300s（SINN_MODEL3D_TIMEOUT_MS env 覆写），>300s 才置 TIMEOUT + 6002/5002 语义 + 允许重试；记录真实耗时 P50/P95 与阶段耗时（startedAt/finishedAt/stage）",
+        "数据模型：sinn_tasks 扩展 taskType/modelId/vendorJobId/stage/startedAt/finishedAt/failure{code,name,hint,vendorCode,httpStatus,at}；新集合 sinn_models3d（openid、modelId、fileID、format、bytes、status、createdAt、deletedAt 不落库）与索引；P1 任务读写路径不受影响（兼容旧记录）",
+        "sinn-cleanup 扩展：删除 24h 前未删除 3D 任务的对象与记录（单模型 ≤45MB，用户 2026-11-12 拍板；>45MB 拒绝入库，已入库的异常记录按失败留存清理），失败中间产物 24h 清理；用户删除/撤回同意立即物理全删对象 + DB（无墓碑），删除后查询统一 404/410",
+        "L1 单测覆盖：适配器状态映射、超时判定、幂等 (openid,clientReqId)、并发 1、删除/清理、6 错误码、越权 404；云函数逻辑可本地 require 测试"
+      ],
+      "estimate": "3d"
+    },
+    {
+      "id": "DEV-0002-04",
+      "role": "dev",
+      "title": "3D 查看页：渲染、旋转/俯仰/缩放手势、自动旋转、AI 标识、保存相册水印",
+      "dependsOn": [
+        "DEV-0002-02",
+        "DEV-0002-03"
+      ],
+      "writeScopes": [
+        "miniprogram/pages/model3d-view/",
+        "miniprogram/components/model3d-viewer/",
+        "miniprogram/services/save-album.js",
+        "tests/unit/pages/model3d-view/",
+        "tests/unit/components/model3d-viewer/"
+      ],
+      "acceptance": [
+        "model3d-view 页面使用页面级 renderer:\"webview\"（SPIKE-0002 实测生效，app 级仍 skyline）；xr-frame 必须组件模式：组件 json {\"component\":true,\"renderer\":\"xr-frame\"}、组件 wxml 只写 <xr-scene> 及 xr-* 元素、页面 <view> 包裹并传 width/height/renderWidth/renderHeight、同一时刻单组件单 scene、HUD 走 triggerEvent；加载云端 GLB/glTF + 纹理，显示加载进度、单模型 60s 超时、失败重试 ≤2 次、命中本地缓存直接展示；加载失败/损坏显示失败态可重试或删除，不白屏不崩溃（AC-5/23）",
+        "旋转交互（BR-5/AC-6）：单指水平 360° 连续旋转、俯仰 ±30° 超出回弹、双指 0.8x–2x 缩放、自动旋转开关（默认关，双指缩放暂停自动旋转、结束恢复）、边界回弹、无空白帧/模型消失",
+        "AI 标识（BR-9/AC-12）：查看页固定位置「AI 生成」文本（不遮挡主体），缩放/旋转/滚动仍可见",
+        "保存相册（BR-7/AC-10）：wx.saveImageToPhotosAlbum 保存当前视角静帧 JPG（downloadFile→保存），图片内烧入「AI 生成」水印；权限拒绝提示、不阻断查看；不导出 glTF/视频；无分享入口",
+        "崩溃/内存兜底：模型加载失败或渲染异常时降级提示并返回历史库，不崩溃；超出 LRU 的旧模型可清理重下",
+        "L1/L2 单测覆盖：手势数学（旋转/俯仰限位/缩放边界）、自动旋转开关与手势冲突、AI 标识可见、保存流程 mock（成功/拒绝/失败）、无分享 API 调用"
+      ],
+      "estimate": "3d"
+    },
+    {
+      "id": "DEV-0002-05",
+      "role": "dev",
+      "title": "历史形象库：列表/切换/删除/本地缓存 LRU",
+      "dependsOn": [
+        "DEV-0002-02",
+        "DEV-0002-03"
+      ],
+      "writeScopes": [
+        "miniprogram/pages/model3d-library/",
+        "miniprogram/services/model3d-cache.js",
+        "tests/unit/pages/model3d-library/"
+      ],
+      "acceptance": [
+        "pages/model3d-library 列表（分页 limit 20 + cursor）：缩略图/生成时间/状态，时间倒序；点击切换加载；空态、加载失败、分页到底均有处理（AC-7/8）",
+        "demo 不限量：不显示容量/保留期限制，不拦截生成数量；删除全部入口二次确认并物理全删；撤回同意后清空（AC-8/9/20）",
+        "单删：调用 API-02-04 后用户侧立即不可见，本地缓存同步清理；服务端对象与记录物理删除（无墓碑），查询 404/410；响应 deletedAt 仅展示不落库（AC-9）",
+        "services/model3d-cache.js：缓存上限 **≤4 个模型且总字节 ≤200MB**（按 lastAccessAt 淘汰，超限先删最旧；45MB×5>200MB），缓存键与 P1 不冲突，禁止缓存明文人像/云端 URL；容量/失效/版本迁移策略；缓存损坏可重建",
+        "L1 单测覆盖：列表分页/排序、删除与缓存同步、LRU 上限、删除全部、撤回清空、错误态"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "DEV-0002-06",
+      "role": "dev",
+      "title": "同意 v2：3D 人像建模披露节（复用 P1 同意流程）",
+      "dependsOn": [
+        "DEV-0002-02"
+      ],
+      "writeScopes": [
+        "miniprogram/pages/consent/",
+        "miniprogram/services/consent.js",
+        "tests/unit/pages/consent/"
+      ],
+      "acceptance": [
+        "consent 页新增「3D 人像建模」披露节（BR-12/AC-19/20）：用途、第三方受托处理方名称与所在地、数据类别、留存期、可删除可撤回、拒绝后果、18+；不做独立 3D 同意页（P2 拍板），同意记录含版本与时间戳",
+        "同意记录区分 3D 披露版本（consentVersion/At），写接口校验；未同意时 3D 入口不可用并说明原因；撤回同意=删除全部 3D 资产与记录+清本地缓存（AC-20）",
+        "拒绝隐私授权后不采集/不上传/不调用 3D 接口（spy=0）；低版本兜底路径不触发隐私 API",
+        "L1/L2 单测覆盖：披露项文本存在、未同意拦截、同意记录、撤回删除、拒绝不采集"
+      ],
+      "estimate": "1d"
+    },
+    {
+      "id": "DEV-0002-07",
+      "role": "dev",
+      "title": "P1.1 2D 品类扩展：单件下装/裙装/外套",
+      "dependsOn": [],
+      "writeScopes": [
+        "miniprogram/pages/garment/",
+        "miniprogram/services/garment-category.js",
+        "tests/unit/pages/garment/"
+      ],
+      "acceptance": [
+        "garment 页支持品类选择：单件下装/裙装/外套（radio/分段控件），选中后按品类调整提示文案与验收判定，默认「上装」兼容 P1（AC-17）",
+        "服务端复用 P1 sinn-task 的 2D 试穿链路与尺码（双表 + 中性映射 + 免责），新增 category 参数传递与校验；品类非法 E_PARAM",
+        "衣服照片不合格拦截（多人/模特上身/电商图/模糊/吊牌）沿用 P1 预检与压缩链路，不合格 createTask 0 次、文案明确（AC-18）",
+        "L1/L2 单测覆盖：品类选择/默认值/非法值、参数透传、拦截分支、回归 P1 上装流程"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "DEV-0002-08",
+      "role": "dev",
+      "title": "低版本/渲染不可用兜底与 3D 入口降级",
+      "dependsOn": [
+        "DEV-0002-02",
+        "DEV-0002-04"
+      ],
+      "writeScopes": [
+        "miniprogram/pages/index/"
+      ],
+      "acceptance": [
+        "首页 3D 入口：渲染能力探测不可用（wx.getSkylineInfo 缺失/不支持、基础库过低、xr-frame/WebGL 不可用）时提示「当前微信版本/设备不支持 3D 查看，请升级微信或使用 2D 试穿」，不初始化 3D 渲染、不白屏、不静默失败；2D 完全可用（BR-13/AC-14）",
+        "低版本微信（约 <8.0.30）沿用 P1 启动兜底（升级提示 + wx.exitMiniProgram），不另做 webview 兜底；3D 入口在旧版不出现或点击提示升级",
+        "L1 单测覆盖：能力探测三态（可用/API 缺失/不支持）、入口显示逻辑、旧版启动分支回归、2D 不受影响"
+      ],
+      "estimate": "1d"
+    },
+    {
+      "id": "DEV-0002-09",
+      "role": "dev",
+      "title": "P2 集成自检与交付（门禁、包体积、AC 自检、DEV-0002.md）",
+      "dependsOn": [
+        "DEV-0002-02",
+        "DEV-0002-03",
+        "DEV-0002-04",
+        "DEV-0002-05",
+        "DEV-0002-06",
+        "DEV-0002-07",
+        "DEV-0002-08"
+      ],
+      "writeScopes": [
+        "docs/dev/DEV-0002.md"
+      ],
+      "acceptance": [
+        "docs/dev/DEV-0002.md 交接文档：做了什么、改了哪些路径、如何验证、遗留风险、未闭合 CP-02-xx、3D 真实调用预算消耗记录（≤¥200，超出先报批）",
+        "check-gates.ps1 与 check-wxapp.ps1 双 FAIL=0；主包 ≤2048KB、package-3d 与 three.js 备选（如启用）在预算内、合计 ≤20480KB；3D 模型/纹理不进包（AC-15）",
+        "AC 自检表：AC-1..AC-30 逐条标注「已实现/部分/未实现」及证据位置（测试或脚本），交 QA-0002-01 比对；AC-25 按 CP-02-16 决策后的口径标注（A 回 SA 改 AC-25 / B 补关键点 spike），未决策前标「阻塞」不得标通过",
+        "P1 回归：P1 的 7 页与 2D 主链路不被破坏（check-wxapp 页面数含分包 10 页、P1 单测通过、P1 AC 关键项回归）",
+        "交接下游 QA：产物路径 + 一句话摘要 + 验收标准；未闭合 CP 与阻塞项明确列出，不得把 mock 结论写成真实通过"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "QA-0002-01",
+      "role": "qa",
+      "title": "TC-0002 测试用例设计（AC-1..AC-30 全量映射）",
+      "dependsOn": [
+        "DEV-0002-01"
+      ],
+      "writeScopes": [
+        "docs/qa/TC-0002.md"
+      ],
+      "acceptance": [
+        "docs/qa/TC-0002.md：AC-1..AC-30 每条至少 1 条用例，编号 TC-0002-L{1|2|3|4}-{seq}，每条注明对应 AC、功能点 F-02-x、验证层（L1/L2/L3/人工/门禁）、前置与预期",
+        "覆盖 3D 生成/恢复（AC-1/2/3/4/5）、旋转手势与真机矩阵（AC-6/24）、历史库与不限量（AC-7/8）、删除（AC-9）、保存水印（AC-10）、传播边界（AC-11/12）、不限额与并发（AC-13）、旧版兜底（AC-14）、包体积（AC-15）、范围外（AC-16）、P1.1 品类（AC-17/18）、同意与 3D 披露（AC-19/20）、18+（AC-21）、幂等（AC-22）、损坏模型（AC-23）、结构保真（AC-25）、肖像边界（AC-26）",
+        "AC-25 当前口径：SPIKE-0002 已实测单样本肤色 ΔE 7.456、发型 IoU 0.9204，五官关键点因无关键点模型未算；CP-02-16 决策（A 回 SA 改 AC-25 / B 补关键点 spike）未闭合前，AC-25 相关用例标「阻塞」并写明解锁条件，不得提前写通过标准",
+        "素材清单：Pexels 真实照片 MAT-01/MAT-02（及补充样张）、mock GLB/损坏 GLB、固定预期断言；记录路径与 SHA；环境依赖（真机、真实 3D API 账号、相册权限）单列并允许标阻塞",
+        "输出 AC→TC 覆盖矩阵，确认 30 条 AC 无遗漏、无重复承载"
+      ],
+      "estimate": "2d"
+    },
+    {
+      "id": "QA-0002-02",
+      "role": "qa",
+      "title": "L3 e2e 与真机矩阵验证（3D 主链路、旋转、历史库、保存、旧版兜底）",
+      "dependsOn": [
+        "QA-0002-01",
+        "DEV-0002-09"
+      ],
+      "writeScopes": [
+        "tests/e2e/model3d/",
+        "tests/fixtures/model3d/"
+      ],
+      "acceptance": [
+        "tests/e2e/model3d/：可自动化用例（miniprogram-automator + mock 云函数/供应商）覆盖 3D 生成成功/失败/超时/恢复、幂等、历史库列表/删除、保存相册 mock、旧版兜底入口、P1.1 品类参数；环境缺失（开发者工具）时用例标「阻塞」并写明原因，不得标通过",
+        "真机矩阵（iOS + Android，微信 ≥8.0.30）：3D 加载耗时、旋转帧率、内存峰值、保存相册（允许/拒绝）、旧版兜底（用户侧旧版设备，缺设备标阻塞）、照片压缩与上传；记录设备/版本/结果，写入 REPORT",
+        "AC-6/24 人工项按 TC-0002-L4 执行并截图/录屏留证；结构保真 AC-25 按 CP-02-16 决策后的口径执行（A 回 SA 改 AC-25 / B 补关键点 spike），未决策前阻塞",
+        "覆盖 AC-2/3/4/5/7/8/9/10/11/12/13/14/17/18/19/20/22/23/26 的可自动化断言（mock 驱动）；真实 3D API 调用按 CP-02-01/07（预算 ¥200）控制并在报告记录 credits 消耗"
+      ],
+      "estimate": "3d"
+    },
+    {
+      "id": "QA-0002-03",
+      "role": "qa",
+      "title": "执行验收并产出 REPORT-0002（AC 结论、证据、缺陷单、阻塞项）",
+      "dependsOn": [
+        "QA-0002-02"
+      ],
+      "writeScopes": [
+        "docs/qa/REPORT-0002.md"
+      ],
+      "acceptance": [
+        "docs/qa/REPORT-0002.md：用例执行率 100%；AC-1..AC-30 每条给结论「通过/失败/阻塞」，阻塞项附原因与解锁条件（真机、真实 3D 账号、AC-25 阈值、CP-02-xx）",
+        "证据：测试命令与输出摘要、真机矩阵记录、保存水印截图、删除后查询/对象 HEAD 断言、包体积与双门禁原文、真实调用 credits 消耗记录（≤¥200）",
+        "缺陷单：失败项按严重级记录复现步骤/期望/实际/证据，交 DEV 修复并回归；不得把 mock 通过写成真实通过，不得把阻塞写成通过",
+        "结论：仅当无未闭合阻塞且双门禁 PASS、RELEASE-CHECKLIST 无未勾选项时可给「通过」；否则「有条件通过/不通过」并逐项写明"
+      ],
+      "estimate": "1d"
+    },
+    {
+      "id": "QA-0002-04",
+      "role": "qa",
+      "title": "RELEASE-CHECKLIST 复核与人工项确认（P2）",
+      "dependsOn": [
+        "QA-0002-03"
+      ],
+      "writeScopes": [
+        "docs/qa/RELEASE-CHECKLIST.md"
+      ],
+      "acceptance": [
+        "复核 RELEASE-CHECKLIST：P2 新增人工项（真机旋转/保存相册/旧版兜底/结构保真/隐私同意）逐项勾选或标阻塞，勾选须附证据链接与执行人/日期",
+        "复核 QA-0002-01 覆盖矩阵：AC-1..AC-30 均有用例且结论已回填，无「未覆盖」；非自动化项均有 RELEASE-CHECKLIST 对应行",
+        "核对未闭合 CP-02-01/02/03/04/06/08/09/10/11/12/13/14/15 与 REPORT-0002 结论一致性：任何未闭合卡点存在时不得给「通过」，只能「有条件通过」",
+        "发布、提审、灰度、回滚由人执行并签字；agent 只准备材料与检查单，不得代签或调用发布接口"
+      ],
+      "estimate": "0.5d"
+    }
+  ]
+}

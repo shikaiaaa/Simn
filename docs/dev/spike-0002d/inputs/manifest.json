@@ -1,0 +1,39 @@
+{
+  "note": "SPIKE-0002D Decart 输入素材（本地生成，未调用任何付费 API）",
+  "generatedAt": "2026-11-12",
+  "person_video": {
+    "path": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\spike-0002d\\scripts\\..\\inputs\\mat-01-person-5s-720x1280.mp4",
+    "bytes": 1621319,
+    "sha256": "7bdd4621c7bbfd1c720565082ab3acee7bc80267097fa88d58c28a8f680c8cb4",
+    "codec_attempts": [
+      {
+        "fourcc": "avc1",
+        "opened": false
+      },
+      {
+        "fourcc": "H264",
+        "opened": false
+      },
+      {
+        "fourcc": "mp4v",
+        "opened": true
+      }
+    ],
+    "codec_used": "mp4v",
+    "width": 720,
+    "height": 1280,
+    "fps": 30,
+    "seconds": 5,
+    "frames_written": 150,
+    "readback_frame_count": 150,
+    "readback_fps": 30.0
+  },
+  "garment_image": {
+    "path": "C:\\Users\\admin\\WeChatProjects\\Sinn\\docs\\dev\\spike-0002d\\scripts\\..\\inputs\\mat-08-garment-crop-1024.jpg",
+    "bytes": 116709,
+    "sha256": "e48ccc1ee18271a03b776a7125753e187c76a7cc6c1f455c2866f1b41c7a42e2",
+    "width": 1024,
+    "height": 1024,
+    "source": "C:\\Users\\admin\\WeChatProjects\\Sinn\\tests\\fixtures\\mat\\mat-08-garment-flat.jpg"
+  }
+}

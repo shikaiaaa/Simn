@@ -45,7 +45,7 @@ describe('DEV-0001-04 sinn-cleanup', function () {
 
     var res = await ctx.cleanupHandler.handle()
     expect(res.ok).toBe(true)
-    expect(res.data).toEqual({ scanned: 1, deleted: 1, failed: 0 })
+    expect(res.data).toEqual({ scanned: 1, deleted: 1, failed: 0, photosPurged: 0, modelsKept: 0 })
     expect(res.requestId).toBeTruthy()
     expect(ctx.store.__countTasks()).toBe(1)
     expect(ctx.store.__countAssets()).toBe(1)
@@ -106,9 +106,9 @@ describe('DEV-0001-04 sinn-cleanup', function () {
   test('幂等：无到期任务时 scanned=0 且不产生副作用', async function () {
     var ctx = fx.makeContext()
     var first = await ctx.cleanupHandler.handle()
-    expect(first.data).toEqual({ scanned: 0, deleted: 0, failed: 0 })
+    expect(first.data).toEqual({ scanned: 0, deleted: 0, failed: 0, photosPurged: 0, modelsKept: 0 })
     var second = await ctx.cleanupHandler.handle()
-    expect(second.data).toEqual({ scanned: 0, deleted: 0, failed: 0 })
+    expect(second.data).toEqual({ scanned: 0, deleted: 0, failed: 0, photosPurged: 0, modelsKept: 0 })
     expect(ctx.storage.__deleted()).toEqual([])
   })
 
